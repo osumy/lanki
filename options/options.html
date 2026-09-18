@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lanki - Settings & Configuration</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="options-container">
+    <header class="options-header">
+      <div class="header-brand">
+        <img src="../icons/icon-48.png" alt="Lanki" class="brand-logo">
+        <div>
+          <h1>Lanki Settings</h1>
+          <p class="subtitle">Configure your LiteLLM proxy, LLM models, chunking, and IELTS prompt</p>
+        </div>
+      </div>
+    </header>
+
+    <div id="alert-banner" class="alert-banner hidden"></div>
+
+    <main class="options-main">
+      <form id="settings-form" class="options-form">
+        <!-- API Endpoint Section -->
+        <section class="config-card">
+          <h2>LLM / LiteLLM Connection</h2>
+          <p class="section-desc">
+            Lanki connects to any OpenAI-compatible API endpoint. If using <b>LiteLLM</b>, start your proxy locally (e.g. <code>litellm --model gpt-4o-mini</code>) and keep the default URL.
+          </p>
+
+          <div class="form-group">
+            <label for="setting-base-url">API Base URL</label>
+            <input
+              type="url"
+              id="setting-base-url"
+              placeholder="http://localhost:4000/v1"
+              required
+            >
+            <span class="help-text">LiteLLM default: <code>http://localhost:4000/v1</code>. For OpenAI direct: <code>https://api.openai.com/v1</code>.</span>
+          </div>
+
+          <div class="form-group">
+            <label for="setting-api-key">API Key</label>
+            <div class="password-group">
+              <input
+                type="password"
+                id="setting-api-key"
+                placeholder="sk-... (optional for local LiteLLM proxy)"
+              >
+              <button type="button" id="toggle-key-visibility" class="btn-addon">👁️</button>
+            </div>
+            <span class="help-text">Stored securely in your local Chrome browser storage only.</span>
+          </div>
+
+          <div class="form-group">
+            <label for="setting-model">Model Name</label>
+            <input
+              type="text"
+              id="setting-model"
+              placeholder="gpt-4o-mini"
+              required
+            >
+            <div class="presets-row">
+              <span class="preset-label">Quick presets:</span>
+              <button type="button" class="preset-chip" data-model="gpt-4o-mini">gpt-4o-mini</button>
+              <button type="button" class="preset-chip" data-model="gemini/gemini-1.5-flash">gemini-flash</button>
+              <button type="button" class="preset-chip" data-model="claude-3-haiku">claude-haiku</button>
+              <button type="button" class="preset-chip" data-model="ollama/llama3">llama3</button>
+            </div>
+          </div>
+
+          <div class="test-row">
+            <button type="button" id="test-connection-btn" class="btn-secondary">Test Connection</button>
+            <div id="test-connection-result" class="test-result hidden"></div>
+          </div>
+        </section>
+
+        <!-- Vision / OCR Settings (API vs Local Offline PP-OCRv4) -->
+        <section class="config-card">
+          <h2>Vision & OCR Engine</h2>
+          <p class="section-desc">
+            Transcribe subtitles and screen snippets captured via the in-page snipping tool (<code>Alt+C</code>).
+          </p>
+
+          <!-- Engine Mode Segmented Control -->
+          <div class="ocr-engine-segmented-control">
+            <button type="button" class="ocr-tab-btn active" data-engine="api" id="ocr-tab-api">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
+              <span>API Endpoint</span>
+            </button>
+            <button type="button" class="ocr-tab-btn" data-engine="local" id="ocr-tab-local">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg>
+              <span>Offline PP-OCRv6</span>
+            </button>
+          </div>
+
+          <!-- PANEL 1: API Endpoint Config -->
+          <div id="ocr-api-panel" class="ocr-panel">
+            <div class="form-checkbox">
+              <label class="checkbox-container">
+                <input type="checkbox" id="setting-dedicated-vision">
+                <span class="checkbox-text">Use dedicated Vision endpoint (e.g. LM Studio / Ollama)</span>
+              </label>
+            </div>
+
+            <div id="vision-settings-fields" class="vision-settings-fields hidden">
+              <div class="form-group">
+                <label for="setting-vision-base-url">Vision API Base URL</label>
+                <input type="url" id="setting-vision-base-url" placeholder="http://localhost:1234/v1">
+                <div class="presets-row">
+                  <span class="preset-label">Quick presets:</span>
+                  <button type="button" class="preset-chip vision-preset-btn" data-url="http://localhost:1234/v1" data-model="qwen2-vl">LM Studio</button>
+                  <button type="button" class="preset-chip vision-preset-btn" data-url="http://localhost:11434/v1" data-model="qwen2-vl:2b">Ollama</button>
+                  <button type="button" class="preset-chip vision-preset-btn" data-url="http://localhost:4000/v1" data-model="gpt-4o-mini">LiteLLM</button>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="setting-vision-model">Vision Model Name</label>
+                <input type="text" id="setting-vision-model" placeholder="qwen2-vl">
+              </div>
+
+              <div class="form-group">
+                <label for="setting-vision-api-key">Vision API Key (Optional)</label>
+                <input type="password" id="setting-vision-api-key" placeholder="Leave blank for local LM Studio / Ollama">
+              </div>
+
+              <div class="test-row">
+                <button type="button" id="test-vision-btn" class="btn-secondary">Test Vision Connection</button>
+                <div id="test-vision-result" class="test-result hidden"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- PANEL 2: Local Offline PP-OCRv6 Engine -->
+          <div id="ocr-local-panel" class="ocr-panel hidden">
+            <div class="local-ocr-card">
+              <div class="local-ocr-header">
+                <div class="local-ocr-title-info">
+                  <span class="local-ocr-name">PaddlePaddle PP-OCRv6 (CPU / WebAssembly)</span>
+                  <span class="local-ocr-desc">State-of-the-art offline text recognition. Runs directly in Chrome via ONNX WebAssembly without internet or external servers.</span>
+                </div>
+                <span id="local-ocr-status-badge" class="badge-tag warning">Checking...</span>
+              </div>
+
+              <!-- Model Preset Selector -->
+              <div class="form-group" style="margin-top: 14px; margin-bottom: 12px;">
+                <label for="setting-local-ocr-preset" style="display: flex; justify-content: space-between; align-items: center;">
+                  <span>Model Variant:</span>
+                  <span id="local-ocr-model-info" class="help-text" style="margin: 0; font-size: 11px;">~6 MB total</span>
+                </label>
+                <div class="select-wrapper">
+                  <select id="setting-local-ocr-preset" class="custom-select">
+                    <option value="v6-tiny">PP-OCRv6 Tiny (Recommended, ~6 MB) - Fastest, lowest memory</option>
+                    <option value="v6-small">PP-OCRv6 Small (High Accuracy, ~30 MB) - 93.3% accuracy, beats v5 server</option>
+                  </select>
+                </div>
+                <span id="local-ocr-preset-desc" class="help-text" style="margin-top: 6px;">
+                  Extremely fast & lightweight (1.7 MB Det + 4.3 MB Rec). Ideal for everyday word clipping on any CPU.
+                </span>
+              </div>
+
+              <!-- Progress bar (during download) -->
+              <div id="local-ocr-progress-container" class="local-ocr-progress-container hidden">
+                <div class="progress-bar-track">
+                  <div id="local-ocr-progress-bar" class="progress-bar-fill" style="width: 0%"></div>
+                </div>
+                <div class="progress-status-row">
+                  <span id="local-ocr-progress-text" class="progress-text">Downloading models (0%)...</span>
+                  <span id="local-ocr-progress-percent" class="progress-percent">0%</span>
+                </div>
+              </div>
+
+              <div class="local-ocr-actions-row">
+                <button type="button" id="download-local-ocr-btn" class="btn-primary-sm">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  <span id="download-btn-text">Download Model (~6 MB)</span>
+                </button>
+
+                <button type="button" id="test-local-ocr-btn" class="btn-secondary-sm" disabled>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                  <span>Test Engine</span>
+                </button>
+
+                <button type="button" id="clear-local-ocr-btn" class="btn-icon-subtle" title="Clear cached models" disabled>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                  <span>Clear Cache</span>
+                </button>
+              </div>
+
+              <div id="test-local-ocr-result" class="test-result hidden"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Generation & Batching Section -->
+        <section class="config-card">
+          <h2>Batching & Queue Behavior</h2>
+
+          <div class="form-group">
+            <label for="setting-chunk-size">Chunk Size (Words per API call)</label>
+            <input
+              type="number"
+              id="setting-chunk-size"
+              min="1"
+              max="50"
+              value="10"
+              required
+            >
+            <span class="help-text">Controls how many words are sent per LLM prompt (e.g. 59 words with chunk size 10 generates 6 batches: 10, 10, 10, 10, 10, 9). All batches are automatically merged into one TSV file.</span>
+          </div>
+
+          <div class="form-checkbox">
+            <label class="checkbox-container">
+              <input type="checkbox" id="setting-auto-clear" checked>
+              <span class="checkbox-text">Automatically clear word queue after successful export</span>
+            </label>
+          </div>
+        </section>
+
+        <!-- Prompt Template Section -->
+        <section class="config-card">
+          <div class="card-header-actions">
+            <div>
+              <h2>Prompt Templates</h2>
+              <p class="section-desc">Select an active prompt template or manage your custom presets.</p>
+            </div>
+            <div class="prompt-header-actions">
+              <button type="button" id="open-prompt-manager-btn" class="btn-secondary-sm" title="Manage all templates">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                <span>Manage Prompts</span>
+              </button>
+              <button type="button" id="quick-add-prompt-btn" class="btn-primary-sm" title="Add a new template">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                <span>New Template</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="settings-active-prompt-select">Active Template</label>
+            <div class="select-wrapper">
+              <select id="settings-active-prompt-select" class="custom-select"></select>
+            </div>
+          </div>
+
+          <!-- Prompt Preview Card -->
+          <div id="prompt-preview-card" class="prompt-preview-card">
+            <div class="prompt-preview-header">
+              <div class="prompt-meta-info">
+                <span id="prompt-card-title" class="prompt-card-title">IELTS Lexicographer</span>
+                <span id="prompt-placeholder-badge" class="badge-tag success">✓ {LIST}</span>
+                <span id="prompt-columns-badge" class="badge-tag info">12 Cols</span>
+              </div>
+              <div class="prompt-card-actions">
+                <button type="button" id="edit-current-prompt-btn" class="btn-icon-subtle" title="Edit this template">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                </button>
+                <button type="button" id="duplicate-current-prompt-btn" class="btn-icon-subtle" title="Duplicate this template">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                </button>
+                <button type="button" id="toggle-prompt-preview-btn" class="btn-icon-subtle" title="Toggle preview content">
+                  <span id="preview-toggle-icon">▾</span>
+                </button>
+              </div>
+            </div>
+            <div id="prompt-preview-body" class="prompt-preview-body">
+              <pre id="prompt-preview-text" class="prompt-preview-text"></pre>
+            </div>
+          </div>
+        </section>
+
+        <!-- Save Button Bar -->
+        <div class="form-footer">
+          <button type="submit" id="save-settings-btn" class="btn-primary-lg">Save Settings</button>
+        </div>
+      </form>
+    </main>
+
+    <!-- PROMPT MANAGER MODAL -->
+    <div id="prompt-modal" class="modal-overlay hidden">
+      <div class="modal-dialog">
+        <header class="modal-header">
+          <div class="modal-title-wrap">
+            <div class="modal-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            </div>
+            <h3 id="modal-title">Manage Prompt Templates</h3>
+          </div>
+          <button type="button" id="close-modal-btn" class="btn-close-modal" title="Close modal">&times;</button>
+        </header>
+
+        <!-- VIEW 1: Prompts List View -->
+        <div id="modal-list-view" class="modal-view">
+          <div class="modal-actions-bar">
+            <span class="modal-counter"><b id="prompt-count">0</b> templates saved</span>
+            <button type="button" id="modal-add-prompt-btn" class="btn-primary-sm">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              <span>Add New Template</span>
+            </button>
+          </div>
+          <div id="modal-prompt-list" class="modal-prompt-list">
+            <!-- Dynamic prompt items injected here -->
+          </div>
+        </div>
+
+        <!-- VIEW 2: Prompt Editor Form View -->
+        <form id="modal-editor-form" class="modal-view hidden">
+          <input type="hidden" id="edit-prompt-id">
+          
+          <div class="form-group">
+            <label for="edit-prompt-title">
+              Template Title
+              <span class="label-hint">E.g., IELTS Lexicographer</span>
+            </label>
+            <input
+              type="text"
+              id="edit-prompt-title"
+              placeholder="e.g. IELTS B2 Lexicographer"
+              required
+              autocomplete="off"
+            >
+          </div>
+
+          <div class="form-group">
+            <div class="editor-label-row">
+              <label for="edit-prompt-content">Prompt Instructions</label>
+              <button type="button" id="insert-placeholder-btn" class="btn-text-action" title="Insert {LIST} at cursor">
+                + Insert {LIST}
+              </button>
+            </div>
+            <textarea
+              id="edit-prompt-content"
+              rows="12"
+              placeholder="Write or paste your custom prompt instructions here..."
+              required
+              spellcheck="false"
+            ></textarea>
+            <span class="help-text">Use <code>{LIST}</code> where word items should be injected. If omitted, words will be automatically appended at the end.</span>
+          </div>
+
+          <!-- Anki TSV Header Group -->
+          <div class="form-group header-editor-group">
+            <div class="editor-label-row">
+              <label for="edit-prompt-headers">
+                Anki Columns Header
+                <span class="label-hint">Maps TSV fields to Anki</span>
+              </label>
+              <div class="header-action-buttons">
+                <button type="button" id="btn-detect-header-from-text" class="btn-pill-action" title="Extract #columns: directly from prompt instructions above">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                  <span>Quick Detect</span>
+                </button>
+                <button type="button" id="btn-ai-generate-header" class="btn-pill-primary" title="Ask AI to analyze prompt instructions and generate Anki headers">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3z"/></svg>
+                  <span>✨ AI Generate</span>
+                </button>
+              </div>
+            </div>
+            <textarea
+              id="edit-prompt-headers"
+              rows="3"
+              placeholder="#separator:tab&#10;#html:true&#10;#columns:Word&#9;Phonetic&#9;Audio..."
+              spellcheck="false"
+            ></textarea>
+            <div class="header-status-row">
+              <span id="header-columns-badge" class="badge-tag info">0 columns</span>
+              <span class="help-text">Anki uses <code>#columns:</code> to map TSV columns into your Note Type fields.</span>
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button type="button" id="modal-cancel-edit-btn" class="btn-secondary">Cancel</button>
+            <button type="submit" id="modal-save-prompt-btn" class="btn-primary-sm">Save Template</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="options.js"></script>
+</body>
+</html>
