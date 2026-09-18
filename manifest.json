@@ -1,0 +1,49 @@
+{
+  "manifest_version": 3,
+  "name": "Lanki - Anki Vocabulary Generator",
+  "version": "1.2.6",
+  "description": "Capture vocabulary from the web and generate custom Anki flashcards via LiteLLM / LM Studio / Ollama in consolidated batches.",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    },
+    "default_title": "Lanki - Anki Vocabulary Generator"
+  },
+  "background": {
+    "service_worker": "background/service-worker.js",
+    "type": "module"
+  },
+  "options_page": "options/options.html",
+  "permissions": [
+    "storage",
+    "contextMenus",
+    "downloads",
+    "scripting",
+    "activeTab",
+    "offscreen"
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  },
+  "commands": {
+    "capture-screen-context": {
+      "suggested_key": {
+        "default": "Alt+C"
+      },
+      "description": "Snip screen area for word context"
+    }
+  },
+  "host_permissions": [
+    "<all_urls>"
+  ]
+}
