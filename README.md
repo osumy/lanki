@@ -1,113 +1,172 @@
-# Lanki - Anki Vocabulary Generator (Chrome Extension)
+<div align="center">
 
-**Lanki** (v1.2.6) is a high-performance Chrome Extension designed to streamline the creation of structured Anki flashcards with custom prompts (or using the 12-field IELTS preset).
+# ⚡ Lanki
 
-It connects to your local **LiteLLM proxy**, **LM Studio** (`http://localhost:1234/v1`), **Ollama** (`http://localhost:11434/v1`), or any OpenAI-compatible API. It collects words with optional context via right-click, manual input, or **screen area snipping (YouTube subtitles/videos)**, automatically splits queues into chunks (e.g., 10 words per batch), and consolidates all results into a **single clean `.txt` / `.tsv` file** ready for 1-click import into Anki.
+### AI-Powered Vocabulary Capture & Anki Flashcard Batch Generator
+**Transform web reading, documents, and screen snippets into rich, multi-field Anki decks in one click.**
 
----
+[![Chrome Extension](https://img.shields.io/badge/Chrome%20Extension-Manifest%20V3-4285F4?logo=googlechrome&logoColor=white)](https://developer.chrome.com/docs/extensions/mv3/)
+[![Anki Ready](https://img.shields.io/badge/Anki-1--Click%20Import-74c0fc?logo=anki&logoColor=white)](https://apps.ankiweb.net/)
+[![Version](https://img.shields.io/badge/version-1.2.6-8b5cf6.svg)](./CHANGELOG.md)
+[![License: MIT](https://img.shields.io/badge/License-MIT-10b981.svg)](LICENSE)
+[![Local AI](https://img.shields.io/badge/Local%20AI-Ollama%20%7C%20LM%20Studio%20%7C%20LiteLLM-f59e0b)](https://github.com/osumy/lanki)
+[![Offline OCR](https://img.shields.io/badge/Offline%20OCR-ONNX%20WebAssembly-6366f1)](https://onnxruntime.ai/)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/osumy/lanki/pulls)
 
-## 🌟 Key Features (v1.2.6)
+<p align="center">
+  <a href="#-key-features">Key Features</a> •
+  <a href="#-workflow--architecture">Workflow</a> •
+  <a href="#-screen-snipper--dual-ocr">Dual OCR</a> •
+  <a href="#-installation">Installation</a> •
+  <a href="#-backend-setup">Backend Setup</a> •
+  <a href="#-how-to-use">How to Use</a> •
+  <a href="#-changelog">Changelog</a>
+</p>
 
-1. **Isolated Prompt-Aware Queues (v1.2.4)**:
-   - Each prompt template maintains its own completely isolated vocabulary queue (e.g., 12-field *IELTS Vocabulary* vs 7-field *IELTS Idioms*).
-   - Words and idioms captured via right-click, screen snip, or popup are tagged to the active template.
-   - Switching templates dynamically switches your queue view, displaying live item count badges in dropdowns.
-   - Generating a deck exports only items belonging to the active template with its exact column headers, avoiding column mismatches in Anki.
-   - Auto-clear on export or "Clear All" only clears items of the active template, leaving items in other prompt queues completely safe.
-2. **Dynamic Anki Headers & AI Header Generator (v1.2.2)**:
-   - Each prompt template can define its own custom Anki TSV column headers (e.g. 7-field Idioms vs 12-field IELTS vocabulary).
-   - Features **`✨ AI Generate`** to automatically analyze prompt instructions with LLM and create compliant `#columns:...` headers, as well as **`🔍 Quick Detect`** to parse embedded headers.
-   - Automatically exports flashcard files matching the active template's exact column headers for flawless 1-click Anki import.
-2. **Context-Aware Vocabulary Capture**:
-   - Polysemous words (e.g., *get on*, *put off*, *run out*) are disambiguated using contextual clues.
-   - Enter context sentences manually in the popup or let Lanki capture them automatically.
-   - Generates flashcards with definitions, Persian meanings, and examples tailored to that exact context.
-3. **Smart Sentence Auto-Capture on Right-Click**:
-   - Highlight any word or idiom on a webpage and right-click **`Add "<word>" to Lanki Queue`**.
-   - Lanki automatically analyzes the DOM to extract the entire enclosing sentence as context without any extra clicks!
-4. **Screen Snipping Tool for YouTube & Videos**:
-   - Press **`Alt+C`**, click **📷 Snip** in the popup, or right-click any video/page.
-   - Drag a rectangular box around video subtitles or visual scenes.
-   - Lanki crops the image, transcribes the sentence using your Vision model (**LM Studio**, **Ollama**, or **LiteLLM**), and presents an in-page editable review modal before saving text-only context to your queue.
-5. **Dual OCR Options: Local Offline PP-OCRv6 & Vision API**:
-   - **Local Offline Engine (PP-OCRv6 ONNX)**: Runs 100% locally in-browser via WebAssembly. Zero internet connection or external server needed. Features 1-click on-demand model download and CacheStorage management.
-   - **Dedicated Vision / API Provider**: Or connect directly to **LM Studio** (port 1234, e.g. `qwen2-vl`, `moondream`), **Ollama** (port 11434), or **LiteLLM**.
-6. **Smart Batching (Chunking)**: Large queues (e.g. 59 words) are automatically divided into manageable chunks (e.g., 10, 10, 10, 10, 10, 9 words) to prevent LLM token degradation or format drift.
-7. **Single Consolidated Export**: Combines all batches into **one single download** with UTF-8 BOM encoding for flawless Persian/English display in Anki on Windows.
-8. **Prompt Templates Management**: Create, edit, duplicate, and organize multiple prompt templates with titles and tags. Select your active template directly from the Queue tab or Settings tab with an interactive preview.
-9. **LiteLLM, LM Studio, Ollama & OpenAI Compatible**: Works with local models (Qwen, Llama, Moondream, Mistral) or cloud models (GPT-4o-mini, Gemini Flash, Claude).
+</div>
 
 ---
 
-## 🚀 Installation Guide
+## 💡 Overview
 
-### 1. Load the Extension in Google Chrome
-1. Clone this repository or download and extract the ZIP archive:
+Building high-quality Anki flashcards manually is slow, disruptive, and tedious. Switching between dictionary tabs, formatting examples, and pasting translations breaks your reading flow. 
+
+**Lanki** is a lightweight, privacy-focused Chrome Extension (Manifest V3) that streamlines your entire vocabulary-building workflow:
+- **Instant Capture**: Save words directly from any webpage with automatically extracted sentence context.
+- **Screen Snipper**: Snip subtitles, diagrams, or locked text anywhere on screen with in-browser offline OCR or Vision models.
+- **Isolated Queues**: Maintain distinct vocabulary queues for each custom prompt template (e.g., 12-field IELTS vocabulary vs 7-field Idioms).
+- **Smart Batch Generation**: Automatically splits large queues into chunks to prevent LLM token degradation and formatting drift.
+- **One-Click Anki Import**: Exports a consolidated, properly formatted TSV file with UTF-8 BOM encoding for flawless multilingual rendering (Persian, English phonetics, RTL/LTR).
+
+Works seamlessly with **local models** (LM Studio, Ollama, LiteLLM) or **cloud APIs** (OpenAI, Gemini, Claude).
+
+---
+
+## 🌟 Key Features
+
+* 🎯 **Smart DOM Sentence Auto-Capture**: Highlight any word or idiom and right-click **"Add to Lanki Queue"**. Lanki inspects the DOM tree to extract the full enclosing sentence as natural context—ensuring accurate disambiguation for polysemous words.
+* 📷 **Screen Area Snipper (`Alt+C`)**: Snip any region on your screen—documents, web pages, locked PDFs, diagrams, or video subtitles (YouTube, Coursera, Netflix). Includes an in-page editable review modal to verify the cropped image and transcribed text.
+* ⚡ **Dual OCR Engine**:
+  * **100% Offline Wasm Engine**: Runs PP-OCRv6 locally in-browser via ONNX Runtime WebAssembly. Zero external servers, zero API tokens, and complete privacy.
+  * **Multimodal Vision API**: Or connect directly to local vision models (`qwen2-vl`, `moondream`) or cloud vision endpoints via LM Studio, Ollama, or LiteLLM.
+* 🗂️ **Isolated Prompt-Aware Queues**: Each prompt template manages its own dedicated vocabulary queue. Switching active templates dynamically updates your queue view with live item count badges, and actions like "Clear All" or "Export" only affect the active template.
+* ✨ **Dynamic Anki Headers & AI Generator**: Configure custom `#columns:...` headers per template. Use **`✨ AI Generate`** to let LLMs automatically construct compliant Anki TSV headers from your prompt instructions, or **`🔍 Quick Detect`** to parse embedded headers.
+* 📦 **Smart Batch Chunking**: Large queues (e.g., 60 words) are automatically processed in configurable chunks (e.g., 10 words/batch) to avoid LLM context limits and output truncation.
+* 💾 **Single Consolidated TSV Export**: Merges all generated batches into a single `.txt`/`.tsv` download formatted with UTF-8 BOM encoding for instant 1-click import into Anki Desktop without character corruption.
+* 🔒 **Local & Privacy First**: No telemetry, no third-party tracking. All settings and queues remain in Chrome's local storage, and prompts can run entirely on your own hardware via Ollama or LM Studio.
+
+---
+
+## 🔄 Workflow & Architecture
+
+```mermaid
+flowchart LR
+    A[Web Reading / Video] -->|Right-Click or Alt+C| B[Lanki Capture]
+    B -->|DOM Context / Wasm OCR| C[Isolated Prompt Queue]
+    C -->|Chunked Batches| D[LLM Engine\nLM Studio / Ollama / LiteLLM]
+    D -->|Consolidated TSV + UTF-8 BOM| E[Single Download File]
+    E -->|1-Click Import| F[Anki Desktop Deck]
+```
+
+---
+
+## 🔍 Screen Snipper & Dual OCR
+
+Lanki offers two distinct OCR modes to suit different hardware setups and privacy preferences:
+
+| Feature | 🖥️ Local Offline Engine | 🌐 Dedicated Vision API |
+| :--- | :--- | :--- |
+| **Technology** | PP-OCRv6 via ONNX Runtime WebAssembly | Multimodal LLMs (Qwen2-VL, Moondream, GPT-4o) |
+| **Runtime** | In-browser Offscreen Document (Wasm SIMD) | LM Studio (`1234`), Ollama (`11434`), LiteLLM (`4000`) |
+| **Internet Required** | ❌ No (runs 100% offline on CPU) | Depends on provider (Local or Cloud) |
+| **Model Options** | `v6-tiny` (~6 MB) & `v6-small` (~30 MB) | Any multimodal model supported by your server |
+| **Speed** | Instant / near-instant CPU inference | Fast with GPU acceleration |
+| **Setup** | 1-Click on-demand download & browser cache | Point to your local or remote endpoint URL |
+
+---
+
+## 🚀 Installation
+
+### Load the Extension in Google Chrome
+1. Clone this repository or download and extract the source archive:
    ```bash
    git clone https://github.com/osumy/lanki.git
    ```
-2. Open Google Chrome and navigate to `chrome://extensions`.
-3. Enable **Developer mode** using the toggle switch in the top right corner.
-4. Click the **Load unpacked** button in the top left.
-5. Select the repository root folder.
-6. Pin the **Lanki** icon to your Chrome toolbar for easy access.
+2. Open Chrome and navigate to `chrome://extensions`.
+3. Toggle on **Developer mode** in the top-right corner.
+4. Click **Load unpacked** in the top-left corner.
+5. Select the `lanki` project root folder.
+6. Pin the **Lanki** icon to your Chrome toolbar for quick access.
 
 ---
 
-## ⚙️ Setting Up LiteLLM Proxy
+## ⚙️ Backend Setup
 
-LiteLLM lets you route requests to 100+ LLMs (OpenAI, Gemini, Claude, DeepSeek, Ollama, etc.) while exposing a standard OpenAI endpoint.
+Lanki connects to any OpenAI-compatible API endpoint. You can run open-source models completely locally or route requests through a proxy.
 
-### Install & Start LiteLLM
+### Option A: LiteLLM Proxy (Recommended for Multi-Model Routing)
+LiteLLM lets you route requests to 100+ LLMs (OpenAI, Gemini, Claude, DeepSeek, Ollama) while exposing a unified OpenAI endpoint:
+
 ```bash
 # Install litellm with proxy support
 pip install "litellm[proxy]"
 
-# Example: Run with your OpenAI API key
+# Run with Gemini:
+export GEMINI_API_KEY="your-gemini-key"
+litellm --model gemini/gemini-3.5-flash --port 4000
+
+# Or run with OpenAI:
 export OPENAI_API_KEY="your-api-key"
 litellm --model gpt-4o-mini --port 4000
-
-# Or run with Gemini:
-export GEMINI_API_KEY="your-gemini-key"
-litellm --model gemini/gemini-1.5-flash --port 4000
 ```
-By default, LiteLLM proxy listens on `http://localhost:4000`.
+* **API Base URL**: `http://localhost:4000/v1`
+
+### Option B: LM Studio (Local GUI)
+1. Download and start [LM Studio](https://lmstudio.ai/).
+2. Load any instruction-tuned model (e.g., `Qwen2.5-7B-Instruct`, `Llama-3.1-8B-Instruct`).
+3. For vision snipping, load a vision model (e.g., `Qwen2-VL-7B-Instruct`).
+4. Start the Local Inference Server on port `1234`.
+* **API Base URL**: `http://localhost:1234/v1`
+
+### Option C: Ollama (Local CLI)
+1. Start [Ollama](https://ollama.com/):
+   ```bash
+   ollama run llama3.1
+   # Optional vision model:
+   ollama run moondream
+   ```
+* **API Base URL**: `http://localhost:11434/v1`
 
 ---
 
 ## 📖 How to Use
 
-### 1. Configure Settings & Prompts (First-time setup)
-1. Click the **Lanki** icon in your Chrome toolbar.
-2. Go to the **Settings** tab.
-3. Verify the **API Base URL** (default is `http://localhost:4000/v1`).
-4. Set the **Model Name** (e.g., `gpt-4o-mini`, `gemini/gemini-1.5-flash`, etc.).
-5. Set your desired **Chunk Size** (default: `10`).
-6. **Prompt Templates**:
-   - Choose an active template from the dropdown (e.g., *IELTS Lexicographer (12 Fields)* or *Concise Definitions*).
-   - Click **Manage** or **New** to create, edit, duplicate, or delete templates.
-   - Use `{LIST}` inside your prompt where words will be injected.
-7. Click **"Test Connection"** to verify LiteLLM connectivity, then click **"Save Settings"**.
+### 1. First-Time Configuration
+1. Click the **Lanki** icon in your browser toolbar and open the **Settings** tab.
+2. Enter your **API Base URL** (e.g., `http://localhost:4000/v1`) and **Model Name** (e.g., `gemini/gemini-3.5-flash` or `gpt-4o-mini`).
+3. Set your preferred **Chunk Size** (default: `10` words per batch).
+4. Select or create a **Prompt Template** (use `{LIST}` where words should be injected).
+5. Click **Test Connection** to ensure your server is reachable, then click **Save Settings**.
 
-### 2. Collect Words
-- **From Web Pages**: Highlight a word -> Right-click -> **"Add to Lanki Queue"**.
-- **From Popup**: Type a word in the input field and press `Enter` or click `+ Add`.
-- You can remove individual words by clicking `×` or clear the entire queue with `Clear All`.
+### 2. Collect Words & Context
+* **From Text**: Highlight a word -> Right-click -> **`Add "<word>" to Lanki Queue`**. Lanki automatically captures the enclosing sentence.
+* **From Screen / Subtitles**: Press **`Alt+C`** or right-click any page -> **`📷 Snip Screen Context`**. Drag a box around any text; verify or adjust in the review modal, then save.
+* **From Popup**: Type a word and optional context directly into the input field and press `Enter`.
 
 ### 3. Generate & Download
-1. Click **"Generate Anki Deck (X words)"**.
-2. Watch the live progress bar as it batches requests through your LLM.
-3. Once completed, a single `.txt` file (e.g., `lanki_anki_deck_20260917_0400.txt`) will download automatically!
+1. In the **Queue** tab, select your target template.
+2. Click **Generate Anki Deck (X items)**.
+3. Watch the live batch progress bar as Lanki chunks requests through your model.
+4. Once completed, a single clean `.txt` file (e.g., `lanki_anki_deck_20260918_1430.txt`) downloads automatically.
 
-### 4. Import into Anki
-1. Open Anki Desktop.
-2. Click **File -> Import** (or press `Ctrl+I`).
-3. Select the downloaded `.txt` file.
-4. Anki will automatically recognize:
-   - Field Separator: `Tab`
-   - Allow HTML in fields: `Checked`
-   - 12 Fields mapped directly to your note type.
-5. Click **Import** — all cards are added in one second!
+### 4. Import into Anki Desktop
+1. Open Anki Desktop and press **`Ctrl+I`** (or **File -> Import**).
+2. Select the downloaded `.txt` file.
+3. Anki will automatically recognize:
+   * **Field Separator**: `Tab`
+   * **Allow HTML in fields**: `Checked`
+   * Column mappings corresponding to your template headers.
+4. Click **Import** — your structured flashcards are ready to study!
 
 ---
 
@@ -115,36 +174,61 @@ By default, LiteLLM proxy listens on `http://localhost:4000`.
 
 ```
 lanki/
-├── manifest.json              # Chrome Extension Manifest V3
-├── icons/                     # Crisp icons (16, 32, 48, 128 px)
-│   ├── icon-16.png
-│   ├── icon-32.png
-│   ├── icon-48.png
-│   └── icon-128.png
+├── manifest.json              # Chrome Extension Manifest V3 configuration
+├── icons/                     # Geometric icons (16, 32, 48, 128 px)
 ├── background/
-│   └── service-worker.js     # Context menu handler, badge sync, in-page toast injection
+│   └── service-worker.js     # Background worker: context menus, shortcuts, badge sync
 ├── offscreen/                 # In-browser offline OCR (PP-OCRv6 via ONNX Runtime Web)
-│   ├── ocr-offscreen.html
-│   ├── ocr-engine.js
-│   ├── ort.min.js
-│   ├── ort-wasm.wasm
-│   ├── ort-wasm-simd.wasm
-│   ├── dict.json             # Tiny model dictionary
-│   └── dict_small.json       # Full 18k character dictionary for Small model
+│   ├── ocr-offscreen.html    # Offscreen document host
+│   ├── ocr-engine.js         # CTC decoder, pre/post-processing, model inference
+│   ├── ort.min.js            # ONNX Runtime Web engine
+│   ├── ort-wasm.wasm         # WebAssembly fallback binary
+│   ├── ort-wasm-simd.wasm    # SIMD-accelerated WebAssembly binary
+│   ├── dict.json             # Tiny dictionary (English/Latin numerals)
+│   └── dict_small.json       # Extended dictionary for Small model
 ├── src/
-│   ├── defaults.js           # Settings defaults, presets, isolated queues, storage
-│   ├── generator.js          # Chunker, prompt formatter, LLM client, TSV parser, exporter
-│   └── snipper.js            # In-page rectangle selection & clean screenshot crop tool
+│   ├── defaults.js           # Configuration schemas, presets, isolated queues, storage
+│   ├── generator.js          # Batch chunker, prompt formatter, LLM client, TSV exporter
+│   └── snipper.js            # In-page rectangle selection & clean crop review modal
 ├── popup/
-│   ├── popup.html            # Main popup UI (Queue view & Settings view)
-│   ├── popup.css             # Polished modern dark UI styling
-│   └── popup.js              # Popup interactions, queue management, live batch generation
+│   ├── popup.html            # Main extension UI (Queue view & Settings view)
+│   ├── popup.css             # Modern dark theme styles
+│   └── popup.js              # Live progress, queue operations, template switching
 ├── options/
-│   ├── options.html          # Full-page options fallback
+│   ├── options.html          # Standalone full-page settings fallback
 │   ├── options.css
 │   └── options.js
 ├── tests/
-│   ├── test_generator.js     # LLM batch generator test suite
-│   └── test_ocr_engine.js    # Local OCR engine & CTC decoder test suite
-└── README.md                 # Documentation
+│   ├── test_generator.js     # Unit tests for batch generator & chunking
+│   └── test_ocr_engine.js    # Unit tests for OCR pre-processing & CTC decoder
+├── CHANGELOG.md              # Full version history following Keep a Changelog
+└── README.md                 # Project documentation
 ```
+
+---
+
+## 📝 Changelog
+
+Recent updates in **v1.2.6**:
+* Added unit test suites for batch generator, chunking logic, and CTC decoder.
+* Refined UTF-8 BOM TSV export encoding for multilingual Anki desktop rendering.
+* Enhanced offline OCR cache handling and lifecycle persistence in service worker.
+
+👉 **View complete release history in [CHANGELOG.md](./CHANGELOG.md)**.
+
+---
+
+## 🤝 Contributing
+
+Contributions, bug reports, and feature requests are welcome!
+1. Fork the repository.
+2. Create your feature branch (`git checkout -b feature/amazing-feature`).
+3. Commit your changes (`git commit -m 'feat: add amazing feature'`).
+4. Push to the branch (`git push origin feature/amazing-feature`).
+5. Open a Pull Request.
+
+---
+
+## 📄 License
+
+Distributed under the **MIT License**. See `LICENSE` for details.
