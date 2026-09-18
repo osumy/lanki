@@ -17,6 +17,7 @@
   <a href="#-key-features">Key Features</a> •
   <a href="#-workflow--architecture">Workflow</a> •
   <a href="#-screen-snipper--dual-ocr">Dual OCR</a> •
+  <a href="#-prompt-templates--anki-note-types">Prompts & Anki Setup</a> •
   <a href="#-installation">Installation</a> •
   <a href="#-backend-setup">Backend Setup</a> •
   <a href="#-how-to-use">How to Use</a> •
@@ -82,6 +83,32 @@ Lanki offers two distinct OCR modes to suit different hardware setups and privac
 | **Model Options** | `v6-tiny` (~6 MB) & `v6-small` (~30 MB) | Any multimodal model supported by your server |
 | **Speed** | Instant / near-instant CPU inference | Fast with GPU acceleration |
 | **Setup** | 1-Click on-demand download & browser cache | Point to your local or remote endpoint URL |
+
+---
+
+## 📝 Prompt Templates & Anki Note Types
+
+Lanki does not force you into a fixed flashcard structure. You can define any number of **custom prompt templates** (e.g., German vocabulary with genders, medical pharmacology cards, coding cheat sheets).
+
+### Included Sample Templates
+We provide two battle-tested templates in the [`prompts/`](./prompts/) folder:
+* 📘 **[IELTS Vocabulary (12 Fields)](./prompts/word_ielts_12field.md)**: Clean lemmas, IPA phonetics, part of speech, CEFR B1/B2 graded dual examples, collocations, word families, and Persian translations.
+* 🗣️ **[IELTS Idioms & Phrases (7 Fields)](./prompts/idiom_ielts_7field.md)**: Canonical idioms, Speaking vs Writing register tags, figurative imagery/origins, spoken IELTS interview examples, and Persian equivalents.
+
+> [!TIP]
+> **Customizing for Other Languages or Subjects**: You can easily feed either template to ChatGPT, Claude, or Gemini and ask:
+> *"Adapt this Lanki prompt template to create a custom [X-field] Anki card for [German / French / Medical Pharmacology / etc.]. Retain the `{LIST}` placeholder and the 3 Anki TSV header lines."*
+
+### ⚠️ Crucial: Setting Up Anki Note Types (Before First Import)
+In Anki Desktop, cards belong to a **Note Type** that defines their fields.
+* **Anki does NOT automatically create custom fields or Note Types when importing a text/TSV file.**
+* If you import a 12-field file into Anki's default `Basic` Note Type (which has only 2 fields: `Front` and `Back`), Anki will only populate the first two columns and discard the rest!
+
+**To set up your Note Type in Anki Desktop (30 seconds):**
+1. In Anki Desktop, press **`Ctrl+Shift+N`** (or go to **Tools -> Manage Note Types**).
+2. Click **Add** -> select **Add: Basic** -> name it (e.g., `Lanki - IELTS Vocabulary`).
+3. Select your new Note Type, click **Fields...**, and add the fields matching your template's header (e.g., `Word`, `Phonetic`, `Audio`, `Part of Speech`...).
+4. When importing (`Ctrl+I`), ensure the **Note Type** dropdown at the top matches your custom Note Type. Anki will automatically map every column 1:1.
 
 ---
 
@@ -162,11 +189,12 @@ litellm --model gpt-4o-mini --port 4000
 ### 4. Import into Anki Desktop
 1. Open Anki Desktop and press **`Ctrl+I`** (or **File -> Import**).
 2. Select the downloaded `.txt` file.
-3. Anki will automatically recognize:
+3. In the import dialog, make sure **Note Type** is set to your matching custom Note Type (e.g. `Lanki - IELTS Vocabulary`).
+4. Anki will automatically recognize:
    * **Field Separator**: `Tab`
    * **Allow HTML in fields**: `Checked`
    * Column mappings corresponding to your template headers.
-4. Click **Import** — your structured flashcards are ready to study!
+5. Click **Import** — your structured flashcards are ready to study!
 
 ---
 
@@ -186,6 +214,10 @@ lanki/
 │   ├── ort-wasm-simd.wasm    # SIMD-accelerated WebAssembly binary
 │   ├── dict.json             # Tiny dictionary (English/Latin numerals)
 │   └── dict_small.json       # Extended dictionary for Small model
+├── prompts/                   # Ready-to-use custom prompt templates & Anki presets
+│   ├── README.md             # Custom prompt guide & LLM adaptation instructions
+│   ├── word_ielts_12field.md # 12-field IELTS vocabulary prompt & Note Type fields
+│   └── idiom_ielts_7field.md # 7-field IELTS idioms/phrasal verbs prompt & Note Type fields
 ├── src/
 │   ├── defaults.js           # Configuration schemas, presets, isolated queues, storage
 │   ├── generator.js          # Batch chunker, prompt formatter, LLM client, TSV exporter
@@ -202,6 +234,7 @@ lanki/
 │   ├── test_generator.js     # Unit tests for batch generator & chunking
 │   └── test_ocr_engine.js    # Unit tests for OCR pre-processing & CTC decoder
 ├── CHANGELOG.md              # Full version history following Keep a Changelog
+├── LICENSE                   # MIT License
 └── README.md                 # Project documentation
 ```
 
