@@ -158,14 +158,14 @@
         <!-- API Key -->
         <div class="form-group">
           <label for="setting-api-key">
-            API Key
-            <span class="label-hint">Optional for local LiteLLM</span>
+            API Key(s)
+            <span class="label-hint">Comma separated for routing</span>
           </label>
           <div class="password-wrapper">
             <input
               type="password"
               id="setting-api-key"
-              placeholder="sk-... (leave empty if not needed)"
+              placeholder="sk-... (or multiple keys separated by comma)"
             >
             <button type="button" id="toggle-key-visibility" class="btn-icon-addon" title="Toggle visibility">
               👁️
@@ -175,21 +175,31 @@
 
         <!-- Model Name -->
         <div class="form-group">
-          <label for="setting-model">
-            Model Name
-          </label>
+          <div class="editor-label-row">
+            <label for="setting-model">
+              Model Name
+            </label>
+            <button type="button" id="btn-fetch-models" class="btn-pill-action" title="Fetch models from API">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+              <span>Fetch Models</span>
+            </button>
+          </div>
           <input
             type="text"
             id="setting-model"
+            list="models-datalist"
             placeholder="gpt-4o-mini"
+            autocomplete="off"
             required
           >
+          <datalist id="models-datalist"></datalist>
           <div class="preset-chips">
             <button type="button" class="chip-btn" data-model="gpt-4o-mini">gpt-4o-mini</button>
             <button type="button" class="chip-btn" data-model="gemini/gemini-1.5-flash">gemini-flash</button>
             <button type="button" class="chip-btn" data-model="claude-3-haiku">claude-haiku</button>
             <button type="button" class="chip-btn" data-model="ollama/llama3">llama3</button>
           </div>
+          <div id="fetch-models-result" class="test-result-inline hidden"></div>
         </div>
 
         <!-- Chunk Size -->
@@ -275,11 +285,11 @@
               </div>
 
               <div class="form-group sub-group">
-                <label for="setting-vision-api-key">Vision API Key (Optional)</label>
+                <label for="setting-vision-api-key">Vision API Key(s) (Optional)</label>
                 <input
                   type="password"
                   id="setting-vision-api-key"
-                  placeholder="Leave blank for LM Studio or Ollama"
+                  placeholder="Leave blank or use comma separated keys"
                 >
               </div>
 

@@ -86,13 +86,6 @@ export async function callLlmChat({ baseUrl, apiKey, model, prompt, signal }) {
   const cleanBase = (baseUrl || "http://localhost:4000/v1").replace(/\/+$/, "");
   const url = `${cleanBase}/chat/completions`;
 
-  const headers = {
-    "Content-Type": "application/json"
-  };
-  if (apiKey && apiKey.trim()) {
-    headers["Authorization"] = `Bearer ${apiKey.trim()}`;
-  }
-
   const isGemini3Plus = /gemini-3/i.test(model || "");
 
   const payload = {
@@ -110,41 +103,123 @@ export async function callLlmChat({ baseUrl, apiKey, model, prompt, signal }) {
     payload.temperature = 0.3;
   }
 
-  let response;
-  try {
-    response = await fetch(url, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(payload),
-      signal
-    });
-  } catch (fetchErr) {
-    if (fetchErr.name === "AbortError") {
-      throw fetchErr;
+  // Parse keys and shuffle for load balancing
+  const keys = (apiKey || "").split(",").map(k => k.trim()).filter(Boolean);
+  if (keys.length === 0) {
+    keys.push(""); // Allow empty key (e.g., local Ollama)
+  } else {
+    // Shuffle keys randomly
+    for (let i = keys.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [keys[i], keys[j]] = [keys[j], keys[i]];
     }
-    throw new Error(
-      `Could not connect to API at ${url}. Ensure your LiteLLM proxy or API server is running. (${fetchErr.message})`
-    );
   }
 
-  if (!response.ok) {
-    let errorDetail = "";
+  let lastError;
+  for (const key of keys) {
+    const headers = {
+      "Content-Type": "application/json"
+    };
+    if (key) {
+      headers["Authorization"] = `Bearer ${key}`;
+    }
+
     try {
-      const errJson = await response.json();
-      errorDetail = errJson.error?.message || JSON.stringify(errJson);
-    } catch {
-      errorDetail = await response.text();
+      const response = await fetch(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload),
+        signal
+      });
+
+      if (!response.ok) {
+        let errorDetail = "";
+        try {
+          const errJson = await response.json();
+          errorDetail = errJson.error?.message || JSON.stringify(errJson);
+        } catch {
+          errorDetail = await response.text();
+        }
+        throw new Error(`API Error (${response.status} ${response.statusText}): ${errorDetail}`);
+      }
+
+      const data = await response.json();
+      const content = data?.choices?.[0]?.message?.content;
+      if (!content) {
+        throw new Error("API returned an empty response or unexpected format.");
+      }
+
+      return content;
+    } catch (err) {
+      if (err.name === "AbortError") throw err;
+      lastError = err;
+      // Continue to next key on error
     }
-    throw new Error(`API Error (${response.status} ${response.statusText}): ${errorDetail}`);
   }
 
-  const data = await response.json();
-  const content = data?.choices?.[0]?.message?.content;
-  if (!content) {
-    throw new Error("API returned an empty response or unexpected format.");
+  throw lastError || new Error(`Could not connect to API at ${url}.`);
+}
+
+/**
+ * Fetch available models from the standard {baseUrl}/models endpoint.
+ */
+export async function fetchAvailableModels(settings, signal) {
+  const baseUrl = settings.apiBaseUrl || "http://localhost:4000/v1";
+  const apiKey = settings.apiKey || "";
+
+  // Gemini specific logic: standard base url usually ends with /v1beta/openai
+  let cleanBase = baseUrl.replace(/\/+$/, "");
+
+  // Attempt /models or related
+  // For standard OpenAI compatibility, GET /v1/models
+  const url = `${cleanBase}/models`;
+
+  const keys = apiKey.split(",").map(k => k.trim()).filter(Boolean);
+  if (keys.length === 0) keys.push("");
+
+  let lastError;
+  for (const key of keys) {
+    const headers = {};
+    if (key) {
+      headers["Authorization"] = `Bearer ${key}`;
+    }
+
+    try {
+      const response = await fetch(url, {
+        method: "GET",
+        headers,
+        signal
+      });
+
+      if (!response.ok) {
+        let errorDetail = "";
+        try {
+          const errJson = await response.json();
+          errorDetail = errJson.error?.message || JSON.stringify(errJson);
+        } catch {
+          errorDetail = await response.text();
+        }
+        throw new Error(`API Error (${response.status} ${response.statusText}): ${errorDetail}`);
+      }
+
+      const data = await response.json();
+      // Handle standard OpenAI { data: [{id: "..."}] } format
+      if (data && data.data && Array.isArray(data.data)) {
+        return data.data.map(m => m.id);
+      }
+      // Handle Google Gemini raw format { models: [{name: "models/..."}] }
+      if (data && data.models && Array.isArray(data.models)) {
+        return data.models.map(m => m.name.replace("models/", ""));
+      }
+
+      throw new Error("Unexpected models response format.");
+    } catch (err) {
+      if (err.name === "AbortError") throw err;
+      lastError = err;
+    }
   }
 
-  return content;
+  throw lastError || new Error(`Could not fetch models from ${url}.`);
 }
 
 /**
@@ -171,13 +246,6 @@ export async function transcribeImageContext({
 }) {
   const cleanBase = (baseUrl || "http://localhost:1234/v1").replace(/\/+$/, "");
   const url = `${cleanBase}/chat/completions`;
-
-  const headers = {
-    "Content-Type": "application/json"
-  };
-  if (apiKey && apiKey.trim()) {
-    headers["Authorization"] = `Bearer ${apiKey.trim()}`;
-  }
 
   const imageUrl = imageBase64.startsWith("data:")
     ? imageBase64
@@ -206,37 +274,61 @@ export async function transcribeImageContext({
     max_tokens: 300
   };
 
-  let response;
-  try {
-    response = await fetch(url, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(payload),
-      signal
-    });
-  } catch (fetchErr) {
-    if (fetchErr.name === "AbortError") throw fetchErr;
-    throw new Error(`Could not connect to Vision model at ${url}. (${fetchErr.message})`);
-  }
-
-  if (!response.ok) {
-    let errorDetail = "";
-    try {
-      const errJson = await response.json();
-      errorDetail = errJson.error?.message || JSON.stringify(errJson);
-    } catch {
-      errorDetail = await response.text();
+  // Parse keys and shuffle for load balancing
+  const keys = (apiKey || "").split(",").map(k => k.trim()).filter(Boolean);
+  if (keys.length === 0) {
+    keys.push(""); // Allow empty key (e.g., local Ollama)
+  } else {
+    // Shuffle keys randomly
+    for (let i = keys.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [keys[i], keys[j]] = [keys[j], keys[i]];
     }
-    throw new Error(`Vision API Error (${response.status} ${response.statusText}): ${errorDetail}`);
   }
 
-  const data = await response.json();
-  const content = data?.choices?.[0]?.message?.content;
-  if (!content) {
-    throw new Error("Vision API returned an empty transcription.");
+  let lastError;
+  for (const key of keys) {
+    const headers = {
+      "Content-Type": "application/json"
+    };
+    if (key) {
+      headers["Authorization"] = `Bearer ${key}`;
+    }
+
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload),
+        signal
+      });
+
+      if (!response.ok) {
+        let errorDetail = "";
+        try {
+          const errJson = await response.json();
+          errorDetail = errJson.error?.message || JSON.stringify(errJson);
+        } catch {
+          errorDetail = await response.text();
+        }
+        throw new Error(`Vision API Error (${response.status} ${response.statusText}): ${errorDetail}`);
+      }
+
+      const data = await response.json();
+      const content = data?.choices?.[0]?.message?.content;
+      if (!content) {
+        throw new Error("Vision API returned an empty transcription.");
+      }
+
+      return content.trim().replace(/^["'“”]+|["'“”]+$/g, "");
+    } catch (err) {
+      if (err.name === "AbortError") throw err;
+      lastError = err;
+      // Continue to next key on error
+    }
   }
 
-  return content.trim().replace(/^["'“”]+|["'“”]+$/g, "");
+  throw lastError || new Error(`Could not connect to Vision model at ${url}.`);
 }
 
 /**

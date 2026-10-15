@@ -21,6 +21,7 @@ import {
   generateAnkiDeck,
   triggerTsvDownload,
   testApiConnection,
+  fetchAvailableModels,
   testVisionConnection,
   generateAnkiHeaderWithLlm
 } from "../src/generator.js";
@@ -68,6 +69,9 @@ const settingBaseUrl = document.getElementById("setting-base-url");
 const settingApiKey = document.getElementById("setting-api-key");
 const toggleKeyVisibility = document.getElementById("toggle-key-visibility");
 const settingModel = document.getElementById("setting-model");
+const modelsDatalist = document.getElementById("models-datalist");
+const btnFetchModels = document.getElementById("btn-fetch-models");
+const fetchModelsResult = document.getElementById("fetch-models-result");
 const settingChunkSize = document.getElementById("setting-chunk-size");
 const settingAutoClear = document.getElementById("setting-auto-clear");
 const testConnectionBtn = document.getElementById("test-connection-btn");
@@ -252,6 +256,9 @@ function setupEventListeners() {
   }
   if (clearLocalOcrBtn) {
     clearLocalOcrBtn.addEventListener("click", handleClearLocalOcrCache);
+  }
+  if (btnFetchModels) {
+    btnFetchModels.addEventListener("click", handleFetchModels);
   }
 
   // Runtime message listener for live download progress updates
@@ -1182,6 +1189,49 @@ function toggleVisionFields() {
     visionSettingsFields.classList.remove("hidden");
   } else {
     visionSettingsFields.classList.add("hidden");
+  }
+}
+
+async function handleFetchModels() {
+  if (!fetchModelsResult || !btnFetchModels) return;
+  fetchModelsResult.className = "test-result-inline";
+  fetchModelsResult.textContent = "Fetching...";
+  fetchModelsResult.classList.remove("hidden");
+  btnFetchModels.disabled = true;
+
+  const testConfig = {
+    apiBaseUrl: settingBaseUrl.value.trim(),
+    apiKey: settingApiKey.value.trim()
+  };
+
+  try {
+    const models = await fetchAvailableModels(testConfig);
+    if (!models || models.length === 0) {
+      throw new Error("No models found.");
+    }
+
+    // Populate datalist
+    if (modelsDatalist) {
+      modelsDatalist.innerHTML = "";
+      models.forEach(modelId => {
+        const option = document.createElement("option");
+        option.value = modelId;
+        modelsDatalist.appendChild(option);
+      });
+    }
+
+    fetchModelsResult.className = "test-result-inline success";
+    fetchModelsResult.textContent = `✓ Fetched ${models.length} models.`;
+
+    // Auto-clear success message after 3 seconds
+    setTimeout(() => {
+      fetchModelsResult.classList.add("hidden");
+    }, 3000);
+  } catch (err) {
+    fetchModelsResult.className = "test-result-inline error";
+    fetchModelsResult.textContent = `✗ Failed: ${err.message}`;
+  } finally {
+    btnFetchModels.disabled = false;
   }
 }
 
