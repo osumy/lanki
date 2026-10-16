@@ -398,11 +398,15 @@ export async function updateBadge(count) {
  * @returns {string} - Filename ending with .txt (e.g. "Idiom_a1b2c3d4.txt")
  */
 export function generateDeckFilename(promptTitle) {
-  const cleanTitle = (promptTitle || "deck")
+  let cleanTitle = (promptTitle || "deck")
     .trim()
     .replace(/[<>:"/\\|?*#%&{}\\<>+~`=!;:@^$\[\]\x00-\x1F]/g, "")
     .replace(/\s+/g, "_")
     .replace(/^_+|_+$/g, "");
+
+  if (cleanTitle.length > 50) {
+    cleanTitle = cleanTitle.substring(0, 50).replace(/_+$/, "");
+  }
 
   const randomId = Math.random().toString(36).substring(2, 10);
   const base = cleanTitle || "deck";

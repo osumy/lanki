@@ -424,10 +424,18 @@ function renderQueue() {
   queueBadge.textContent = String(count);
 
   if (count === 0) {
-    emptyState.classList.remove("hidden");
-    const emptySubtext = emptyState.querySelector("p");
-    if (emptySubtext) {
-      emptySubtext.innerHTML = `No items queued for <b>${activePromptTitle}</b>.<br>Add words above or highlight and right-click on any webpage.`;
+    const isJobShowing =
+      (popupCompletedContainer && !popupCompletedContainer.classList.contains("hidden")) ||
+      (popupInflightContainer && !popupInflightContainer.classList.contains("hidden"));
+
+    if (isJobShowing) {
+      emptyState.classList.add("hidden");
+    } else {
+      emptyState.classList.remove("hidden");
+      const emptySubtext = emptyState.querySelector("p");
+      if (emptySubtext) {
+        emptySubtext.innerHTML = `No items queued for <b>${activePromptTitle}</b>.<br>Add words above or highlight and right-click on any webpage.`;
+      }
     }
     wordListContainer.innerHTML = "";
     statsSummary.textContent = `0 words in "${activePromptTitle}" queue${totalCount > 0 ? ` (${totalCount} total in other prompts)` : ""}`;
@@ -649,6 +657,7 @@ async function handleDismissJob() {
     popupCompletedContainer?.classList.add("hidden");
     popupInflightContainer?.classList.add("hidden");
     unlockQueueControls();
+    renderQueue();
   }
 }
 
@@ -676,7 +685,10 @@ async function handleCopyTsv() {
 async function handleDownloadAgain() {
   if (lastGeneratedTsv) {
     const activePrompt = getActivePrompt(currentSettings);
-    const filename = lastGeneratedFilename || generateDeckFilename(activePrompt?.title || "deck");
+    let filename = lastGeneratedFilename;
+    if (!filename || filename === "download" || filename === "download.txt" || !filename.toLowerCase().endsWith(".txt")) {
+      filename = generateDeckFilename(activePrompt?.title || "deck");
+    }
     await triggerTsvDownload(lastGeneratedTsv, filename, activePrompt?.title || "deck");
     showAlert("Download started!", "success", 2000);
   }
@@ -705,6 +717,7 @@ function syncJobStateToUI(job) {
   if (job.status === "running") {
     popupCompletedContainer?.classList.add("hidden");
     popupInflightContainer?.classList.remove("hidden");
+    emptyState?.classList.add("hidden");
     lockQueueControls();
 
     const totalChunks = job.totalChunks || 1;
@@ -731,6 +744,7 @@ function syncJobStateToUI(job) {
   if (job.status === "completed") {
     popupInflightContainer?.classList.add("hidden");
     popupCompletedContainer?.classList.remove("hidden");
+    emptyState?.classList.add("hidden");
     unlockQueueControls();
 
     lastGeneratedTsv = job.tsvContent;
@@ -844,7 +858,7 @@ function updatePopupGeminiKeyValidationBadges() {
 }
 
 function handleTogglePopupGeminiKeysMask() {
-  const wrapper = settingGeminiKeys?.closest(".textarea-wrapper");
+  const wrapper = document.getElementById("gemini-keys-wrapper") || settingGeminiKeys?.closest(".textarea-wrapper");
   if (!wrapper) return;
   wrapper.classList.toggle("masked");
   const isMasked = wrapper.classList.contains("masked");
@@ -859,6 +873,13 @@ let autoSaveDebounceTimer = null;
 
 async function autoSaveCurrentSettings() {
   if (!currentSettings) return;
+
+  const autosaveBadge = document.getElementById("settings-autosave-badge");
+  const autosaveText = document.getElementById("settings-autosave-text");
+  if (autosaveBadge && autosaveText) {
+    autosaveBadge.classList.add("saving");
+    autosaveText.textContent = "Saving...";
+  }
 
   const chunkSize = parseInt(settingChunkSize?.value, 10);
   if (!isNaN(chunkSize) && chunkSize >= 1 && chunkSize <= 50) {
@@ -902,6 +923,11 @@ async function autoSaveCurrentSettings() {
   }
 
   await saveSettings(currentSettings);
+
+  if (autosaveBadge && autosaveText) {
+    autosaveBadge.classList.remove("saving");
+    autosaveText.textContent = "Auto-saved";
+  }
 }
 
 function debouncedAutoSave(delay = 400) {

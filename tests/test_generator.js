@@ -250,5 +250,29 @@ const fnEmpty = generateDeckFilename("");
 assert(/^deck_[a-z0-9]+\.txt$/.test(fnEmpty), `Empty prompt title should fall back to 'deck_<randomId>.txt', got '${fnEmpty}'`);
 console.log("✓ Test 19: generateDeckFilename sanitizes special chars and handles empty titles");
 
-console.log("--- All 19 tests passed successfully! ---");
+// Test 20: generateDeckFilename handles Persian and Unicode prompt titles properly
+const fnPersian = generateDeckFilename("اصطلاحات انگلیسی");
+assert(/^اصطلاحات_انگلیسی_[a-z0-9]+\.txt$/.test(fnPersian), `Persian title should format cleanly, got '${fnPersian}'`);
+console.log("✓ Test 20: generateDeckFilename preserves Unicode / Persian prompt titles");
+
+// Test 21: generateDeckFilename bounds long titles to <= 50 characters before random ID
+const longTitle = "A".repeat(120);
+const fnLong = generateDeckFilename(longTitle);
+assert(fnLong.startsWith("A".repeat(50) + "_"), `Filename prefix must be capped at 50 chars, got prefix length: ${fnLong.indexOf("_")}`);
+assert(fnLong.endsWith(".txt"), "Filename must end with .txt");
+console.log("✓ Test 21: generateDeckFilename caps long titles at 50 characters");
+
+// Test 22: null and undefined fallback to deck_<randomId>.txt
+const fnNull = generateDeckFilename(null);
+const fnUndef = generateDeckFilename(undefined);
+assert(/^deck_[a-z0-9]+\.txt$/.test(fnNull), `null title should fall back to deck, got '${fnNull}'`);
+assert(/^deck_[a-z0-9]+\.txt$/.test(fnUndef), `undefined title should fall back to deck, got '${fnUndef}'`);
+console.log("✓ Test 22: generateDeckFilename handles null and undefined safely");
+
+// Test 23: All-symbol prompt title cleanly falls back to deck_<randomId>.txt
+const fnSymbolsOnly = generateDeckFilename("???***:::///<>|");
+assert(/^deck_[a-z0-9]+\.txt$/.test(fnSymbolsOnly), `All-symbol title should fall back to deck, got '${fnSymbolsOnly}'`);
+console.log("✓ Test 23: generateDeckFilename handles all-symbol inputs with safe fallback");
+
+console.log("--- All 23 tests passed successfully! ---");
 

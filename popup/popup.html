@@ -224,21 +224,27 @@
     <!-- SETTINGS TAB -->
     <section id="tab-settings" class="tab-content hidden">
       <form id="settings-form" class="settings-form">
-        <!-- LLM Provider Mode Segmented Control -->
-        <div class="provider-segmented-control" role="tablist" aria-label="LLM Provider Mode">
-          <button type="button" class="provider-tab-btn active" data-provider="custom" id="provider-tab-custom">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/>
-              <rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
-            </svg>
-            <span>Custom Proxy</span>
-          </button>
-          <button type="button" class="provider-tab-btn" data-provider="gemini" id="provider-tab-gemini">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3z"/>
-            </svg>
-            <span>Direct Gemini</span>
-          </button>
+        <!-- LLM Provider Mode Segmented Control & Auto-save Status -->
+        <div class="settings-top-bar">
+          <div class="provider-segmented-control" role="tablist" aria-label="LLM Provider Mode">
+            <button type="button" class="provider-tab-btn active" data-provider="custom" id="provider-tab-custom">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/>
+                <rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
+              </svg>
+              <span>Custom Proxy</span>
+            </button>
+            <button type="button" class="provider-tab-btn" data-provider="gemini" id="provider-tab-gemini">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3z"/>
+              </svg>
+              <span>Direct Gemini</span>
+            </button>
+          </div>
+          <span id="settings-autosave-badge" class="autosave-badge" title="All settings are saved automatically">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+            <span id="settings-autosave-text">Auto-saved</span>
+          </span>
         </div>
 
         <!-- PANEL 1: Custom / LiteLLM Proxy -->
@@ -303,14 +309,14 @@
                 <span class="badge-tag error hidden" id="key-count-invalid">0 invalid</span>
               </div>
             </div>
-            <div class="textarea-wrapper" id="gemini-keys-wrapper">
+            <div class="textarea-wrapper masked" id="gemini-keys-wrapper">
               <textarea
                 id="setting-gemini-keys"
                 rows="3"
                 placeholder="AIzaSyA...&#10;AIzaSyB..."
                 spellcheck="false"
               ></textarea>
-              <button type="button" id="toggle-gemini-keys-mask" class="btn-addon-float" title="Hide keys" aria-label="Toggle key masking">🙈</button>
+              <button type="button" id="toggle-gemini-keys-mask" class="btn-addon-float" title="Show keys" aria-label="Toggle key masking">👁️</button>
             </div>
           </div>
 
