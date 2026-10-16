@@ -5,6 +5,20 @@ All notable changes to the **Lanki** project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-10-16
+
+### Added
+- **Direct Google Gemini Multi-Key Routing**: Directly connect to Gemini API without requiring an external LiteLLM proxy server.
+- **Client-Side Load Balancing Algorithms**: Built-in Round-Robin, Least-Busy (concurrency/load tracking), and Rate-Limit Fallback routing.
+- **Smart Quota & Cooldown Failover**: Automatic detection of HTTP 429 (`RESOURCE_EXHAUSTED`) with temporary cooldown and automatic retry on healthy keys.
+- **Background Batch Generation Persistence**: Relocated deck generation to MV3 Service Worker with atomic chunk checkpoints in `chrome.storage.local`. Closing the popup never interrupts or resets in-flight batch jobs.
+- **Automated TSV Download & In-Page Toasts**: Automatic file download and congratulatory toast notification in the active web tab upon background batch completion.
+- **Comprehensive Test Suite**: Added `tests/test_router.js` with 15/15 automated test scenarios covering key rotation, load distribution, and cooldown recovery.
+
+### Changed
+- **Modernized Settings UI/UX**: Added segmented provider switcher (Custom/LiteLLM vs. Direct Gemini), key count badges, and per-key connectivity diagnostics.
+- **Enhanced API Key Masking**: Secure blurred key masking with one-click reveal overlay and dedicated header toggle button.
+
 ## [1.2.6] - 2026-09-18
 
 ### Added

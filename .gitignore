@@ -1,9 +1,11 @@
-﻿# Dependencies
+# Dependencies
 node_modules/
 package-lock.json
 
 # Local scratch and temporary test assets
 scratch/
+.agents/
+PROJECT.md
 lanki.rar
 *.tmp
 *.log
