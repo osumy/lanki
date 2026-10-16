@@ -10,9 +10,37 @@ import {
 } from "../src/defaults.js";
 
 import { transcribeImageContext } from "../src/generator.js";
+import { GeminiRouter } from "../src/router.js";
+import {
+  startBatchJob,
+  cancelBatchJob,
+  getGenerationJobState,
+  dismissBatchJob,
+  handleWatchdogAlarm,
+  resumeBatchJobIfNeeded,
+  WATCHDOG_ALARM_NAME
+} from "./batch-runner.js";
 
 const CONTEXT_MENU_SELECTION_ID = "lanki-add-word";
 const CONTEXT_MENU_SNIP_ID = "lanki-snip-screen";
+
+// Register alarms listener for keepalive watchdog
+if (typeof chrome !== "undefined" && chrome.alarms?.onAlarm) {
+  chrome.alarms.onAlarm.addListener(async (alarm) => {
+    if (alarm.name === WATCHDOG_ALARM_NAME) {
+      await handleWatchdogAlarm(alarm);
+    }
+  });
+}
+
+// Check if interrupted batch job needs to be resumed on startup
+if (typeof chrome !== "undefined" && chrome.runtime?.onStartup) {
+  chrome.runtime.onStartup.addListener(async () => {
+    await resumeBatchJobIfNeeded();
+  });
+}
+resumeBatchJobIfNeeded().catch((err) => console.warn("Lanki SW: resume check error:", err));
+
 
 // Setup context menus and default state on install
 chrome.runtime.onInstalled.addListener(async () => {
@@ -370,6 +398,98 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ success: true, count: promptQueueCount, totalCount: queue.length });
       } catch (err) {
         console.error("Failed to add to queue:", err);
+        sendResponse({ success: false, error: err.message });
+      }
+    })();
+    return true;
+  }
+
+  // -------------------------------------------------------------
+  // Background Batch Flashcard Generation & Persistence Handlers
+  // -------------------------------------------------------------
+  if (message.action === "START_GENERATION") {
+    (async () => {
+      try {
+        const settings = message.settings || await getSettings();
+        let words = message.words;
+        const promptId = message.promptId || settings.activePromptId || "";
+        if (!words || !Array.isArray(words) || words.length === 0) {
+          words = await getQueue(promptId);
+        }
+        const activePrompt = getActivePrompt(settings);
+        const promptTitle = message.promptTitle || activePrompt?.title || "Anki Deck";
+
+        const result = await startBatchJob({
+          words,
+          settings,
+          promptId,
+          promptTitle
+        });
+        sendResponse(result);
+      } catch (err) {
+        sendResponse({ success: false, error: err.message });
+      }
+    })();
+    return true;
+  }
+
+  if (message.action === "CANCEL_GENERATION") {
+    (async () => {
+      try {
+        const result = await cancelBatchJob(message.jobId);
+        sendResponse(result);
+      } catch (err) {
+        sendResponse({ success: false, error: err.message });
+      }
+    })();
+    return true;
+  }
+
+  if (message.action === "GET_GENERATION_STATE") {
+    (async () => {
+      try {
+        const job = await getGenerationJobState();
+        sendResponse({ success: true, job, generationJob: job });
+      } catch (err) {
+        sendResponse({ success: false, error: err.message });
+      }
+    })();
+    return true;
+  }
+
+  if (message.action === "DISMISS_GENERATION_JOB") {
+    (async () => {
+      try {
+        const result = await dismissBatchJob();
+        sendResponse(result);
+      } catch (err) {
+        sendResponse({ success: false, error: err.message });
+      }
+    })();
+    return true;
+  }
+
+  if (message.action === "TEST_GEMINI_KEYS") {
+    (async () => {
+      try {
+        const settings = await getSettings();
+        const keys = (message.keys && message.keys.length > 0) ? message.keys : (settings.geminiApiKeys || []);
+        const model = message.model || settings.geminiModel || "gemini-2.5-flash";
+        const cooldownSeconds = typeof message.cooldownSeconds === "number" ? message.cooldownSeconds : (settings.geminiCooldownSeconds || 60);
+        const maxRetries = typeof message.maxRetries === "number" ? message.maxRetries : (settings.geminiMaxRetries || 3);
+        const strategy = message.strategy || settings.geminiStrategy || "round-robin";
+
+        const router = new GeminiRouter({
+          keys,
+          model,
+          strategy,
+          cooldownSeconds,
+          maxRetries
+        });
+
+        const poolResult = await router.testPool(model);
+        sendResponse({ success: true, ...poolResult });
+      } catch (err) {
         sendResponse({ success: false, error: err.message });
       }
     })();
