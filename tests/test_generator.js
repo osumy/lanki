@@ -4,7 +4,7 @@ import {
   formatPromptForWords,
   parseTsvRows
 } from "../src/generator.js";
-import { ANKI_HEADER_LINES, SAMPLE_IELTS_PROMPT } from "../src/defaults.js";
+import { ANKI_HEADER_LINES, SAMPLE_IELTS_PROMPT, generateDeckFilename } from "../src/defaults.js";
 
 console.log("--- Running Lanki Generator Tests ---");
 
@@ -233,6 +233,22 @@ assert.strictEqual(stateQueue[1].word, "ubiquitous", "Vocab items must be comple
 
 const remainingIdioms = getItemsForPrompt(stateQueue, "prompt_idioms");
 assert.strictEqual(remainingIdioms.length, 0, "Idioms queue is now empty");
-console.log("✓ Test 17: Per-prompt auto-clear clears exported prompt while preserving all others");
+// Test 18: generateDeckFilename produces [prompt]_[randomId].txt
+const fn1 = generateDeckFilename("Idiom");
+assert(/^Idiom_[a-z0-9]+\.txt$/.test(fn1), `Filename '${fn1}' should match 'Idiom_<randomId>.txt'`);
 
-console.log("--- All 17 tests passed successfully! ---");
+const fn2 = generateDeckFilename("IELTS Lexicographer");
+assert(/^IELTS_Lexicographer_[a-z0-9]+\.txt$/.test(fn2), `Filename '${fn2}' should match 'IELTS_Lexicographer_<randomId>.txt'`);
+console.log("✓ Test 18: generateDeckFilename produces [promptTitle]_[randomId].txt format");
+
+// Test 19: generateDeckFilename sanitizes forbidden characters and handles empty prompt
+const fnDirty = generateDeckFilename("My / Prompt * With : Bad? Chars <> | \"");
+assert(!/[<>:"/\\|?*]/.test(fnDirty), `Filename '${fnDirty}' must not contain illegal filesystem chars`);
+assert(fnDirty.endsWith(".txt"), `Filename '${fnDirty}' must end with .txt`);
+
+const fnEmpty = generateDeckFilename("");
+assert(/^deck_[a-z0-9]+\.txt$/.test(fnEmpty), `Empty prompt title should fall back to 'deck_<randomId>.txt', got '${fnEmpty}'`);
+console.log("✓ Test 19: generateDeckFilename sanitizes special chars and handles empty titles");
+
+console.log("--- All 19 tests passed successfully! ---");
+

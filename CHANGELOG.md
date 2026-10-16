@@ -5,6 +5,15 @@ All notable changes to the **Lanki** project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1] - 2026-10-16
+
+### Fixed
+- **Automated TSV Download Filename Format**: Enforced `[promptTitle]_[randomId].txt` naming pattern (e.g. `Idiom_a1b2c3d4.txt`) across both background and popup download paths. Resolved Chrome's fallback generic `download` filename by properly handling MIME types (`text/plain`) and registering `chrome.downloads.onDeterminingFilename`.
+- **Popup Container Vertical Scrolling**: Added `overflow-y: auto` with custom scrollbars to `.tab-content` and `#tab-queue`, preventing layout cutoffs when deck summaries, queue lists, or footer controls extend beyond 600px.
+- **Generation Duration Display**: Streamlined deck completion summary by removing the oversized generation time metric card and adding a discreet, elegant duration badge (`⏱ Xs`) in the corner under the statistics box.
+- **Settings Auto-Saving**: Automatically persist provider tab switches (Custom Proxy vs Direct Gemini), model dropdowns, routing strategies, chunk sizes, and API inputs in real time without requiring manual scrolling to click "Save Settings".
+- **Gemini API Key Privacy Toggle**: Fixed the key masking button (`🙈`/`👁️`) with `-webkit-text-security: disc` and CSS blur filtering to reliably conceal and reveal API keys on demand.
+
 ## [1.3.0] - 2026-10-16
 
 ### Added

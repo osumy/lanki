@@ -41,6 +41,18 @@ if (typeof chrome !== "undefined" && chrome.runtime?.onStartup) {
 }
 resumeBatchJobIfNeeded().catch((err) => console.warn("Lanki SW: resume check error:", err));
 
+// Ensure downloaded Anki files retain their prompt-based filenames
+if (typeof chrome !== "undefined" && chrome.downloads?.onDeterminingFilename) {
+  chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
+    if (item.byExtensionId === chrome.runtime.id) {
+      if (item.filename && item.filename !== "download") {
+        suggest({ filename: item.filename, conflictAction: "uniquify" });
+        return true;
+      }
+    }
+  });
+}
+
 
 // Setup context menus and default state on install
 chrome.runtime.onInstalled.addListener(async () => {

@@ -213,8 +213,14 @@ function setupListeners() {
 
   // Gemini Multi-Key Listeners
   if (settingGeminiKeys) {
-    settingGeminiKeys.addEventListener("input", updateGeminiKeyValidationBadges);
-    settingGeminiKeys.addEventListener("blur", updateGeminiKeyValidationBadges);
+    settingGeminiKeys.addEventListener("input", () => {
+      updateGeminiKeyValidationBadges();
+      debouncedAutoSave(500);
+    });
+    settingGeminiKeys.addEventListener("blur", () => {
+      updateGeminiKeyValidationBadges();
+      autoSaveCurrentSettings();
+    });
   }
   if (toggleGeminiKeysMask) {
     toggleGeminiKeysMask.addEventListener("click", handleToggleGeminiKeysMask);
@@ -224,18 +230,65 @@ function setupListeners() {
     maskOverlay.addEventListener("click", handleToggleGeminiKeysMask);
   }
   if (settingGeminiModel) {
-    settingGeminiModel.addEventListener("change", handleGeminiModelChange);
+    settingGeminiModel.addEventListener("change", () => {
+      handleGeminiModelChange();
+      autoSaveCurrentSettings();
+    });
+  }
+  if (settingGeminiCustomModel) {
+    settingGeminiCustomModel.addEventListener("input", () => debouncedAutoSave(500));
   }
   if (settingGeminiStrategy) {
-    settingGeminiStrategy.addEventListener("change", (e) => updateGeminiStrategyDesc(e.target.value));
+    settingGeminiStrategy.addEventListener("change", (e) => {
+      updateGeminiStrategyDesc(e.target.value);
+      autoSaveCurrentSettings();
+    });
+  }
+  if (settingGeminiCooldown) {
+    settingGeminiCooldown.addEventListener("input", () => debouncedAutoSave(500));
+    settingGeminiCooldown.addEventListener("change", () => autoSaveCurrentSettings());
+  }
+  if (settingGeminiRetries) {
+    settingGeminiRetries.addEventListener("input", () => debouncedAutoSave(500));
+    settingGeminiRetries.addEventListener("change", () => autoSaveCurrentSettings());
   }
   if (btnTestGeminiKeys) {
     btnTestGeminiKeys.addEventListener("click", handleTestGeminiKeys);
   }
 
+  // Custom proxy & general auto-save
+  if (settingBaseUrl) {
+    settingBaseUrl.addEventListener("input", () => debouncedAutoSave(500));
+  }
+  if (settingApiKey) {
+    settingApiKey.addEventListener("input", () => debouncedAutoSave(500));
+  }
+  if (settingModel) {
+    settingModel.addEventListener("input", () => debouncedAutoSave(500));
+  }
+  if (settingChunkSize) {
+    settingChunkSize.addEventListener("input", () => debouncedAutoSave(500));
+    settingChunkSize.addEventListener("change", () => autoSaveCurrentSettings());
+  }
+  if (settingAutoClear) {
+    settingAutoClear.addEventListener("change", () => autoSaveCurrentSettings());
+  }
+
   // Vision triggers
   if (settingDedicatedVision) {
-    settingDedicatedVision.addEventListener("change", toggleVisionFields);
+    settingDedicatedVision.addEventListener("change", () => {
+      toggleVisionFields();
+      autoSaveCurrentSettings();
+    });
+  }
+  if (settingVisionBaseUrl) {
+    settingVisionBaseUrl.addEventListener("input", () => debouncedAutoSave(500));
+  }
+  if (settingVisionModel) {
+    settingVisionModel.addEventListener("input", () => debouncedAutoSave(500));
+  }
+  if (settingVisionApiKey) {
+    settingVisionApiKey.addEventListener("input", () => debouncedAutoSave(500));
   }
   if (testVisionBtn) {
     testVisionBtn.addEventListener("click", handleTestVisionConnection);
@@ -244,6 +297,7 @@ function setupListeners() {
     chip.addEventListener("click", () => {
       settingVisionBaseUrl.value = chip.dataset.url;
       settingVisionModel.value = chip.dataset.model;
+      autoSaveCurrentSettings();
     });
   });
 
@@ -845,9 +899,10 @@ async function handleSaveSettings(e) {
   showAlert("Settings saved successfully!", "success");
 }
 
-function switchLlmProviderTab(provider, updateState = true) {
+async function switchLlmProviderTab(provider, updateState = true) {
   if (updateState && currentSettings) {
     currentSettings.llmProvider = provider;
+    await saveSettings(currentSettings);
   }
 
   if (provider === "gemini") {
@@ -865,6 +920,72 @@ function switchLlmProviderTab(provider, updateState = true) {
     providerPanelCustom?.classList.remove("hidden");
     providerPanelGemini?.classList.add("hidden");
   }
+}
+
+let autoSaveDebounceTimer = null;
+
+async function autoSaveCurrentSettings() {
+  if (!currentSettings) return;
+
+  const chunkSize = parseInt(settingChunkSize?.value, 10);
+  if (!isNaN(chunkSize) && chunkSize >= 1 && chunkSize <= 50) {
+    currentSettings.chunkSize = chunkSize;
+  }
+
+  const isGemini = providerTabGemini?.classList.contains("active");
+  currentSettings.llmProvider = isGemini ? "gemini" : "custom";
+
+  if (settingBaseUrl) currentSettings.apiBaseUrl = settingBaseUrl.value.trim();
+  if (settingApiKey) currentSettings.apiKey = settingApiKey.value.trim();
+  if (settingModel) currentSettings.model = settingModel.value.trim() || "gpt-4o-mini";
+  if (settingAutoClear) currentSettings.autoClearOnExport = settingAutoClear.checked;
+
+  if (settingGeminiKeys) {
+    const parsedKeys = parseGeminiKeys(settingGeminiKeys.value || "");
+    currentSettings.geminiApiKeys = parsedKeys;
+    currentSettings.geminiKeys = parsedKeys;
+  }
+  let selectedGeminiModel = settingGeminiModel?.value || "gemini-2.5-flash";
+  if (selectedGeminiModel === "custom" && settingGeminiCustomModel?.value.trim()) {
+    selectedGeminiModel = settingGeminiCustomModel.value.trim();
+  }
+  currentSettings.geminiModel = selectedGeminiModel;
+  currentSettings.geminiStrategy = settingGeminiStrategy?.value || "round-robin";
+  currentSettings.geminiRoutingStrategy = currentSettings.geminiStrategy;
+
+  const cd = parseInt(settingGeminiCooldown?.value, 10);
+  if (!isNaN(cd) && cd >= 5) currentSettings.geminiCooldownSeconds = cd;
+
+  const retries = parseInt(settingGeminiRetries?.value, 10);
+  if (!isNaN(retries) && retries >= 0) currentSettings.geminiMaxRetries = retries;
+
+  currentSettings.ocrEngine = ocrTabLocal?.classList.contains("active") ? "local" : "api";
+
+  if (settingDedicatedVision) {
+    currentSettings.useDedicatedVision = settingDedicatedVision.checked;
+  }
+  if (settingVisionBaseUrl) {
+    currentSettings.visionBaseUrl = settingVisionBaseUrl.value.trim() || "http://localhost:1234/v1";
+  }
+  if (settingVisionModel) {
+    currentSettings.visionModel = settingVisionModel.value.trim() || "qwen2-vl";
+  }
+  if (settingVisionApiKey) {
+    currentSettings.visionApiKey = settingVisionApiKey.value.trim();
+  }
+
+  await saveSettings(currentSettings);
+}
+
+function debouncedAutoSave(delay = 400) {
+  if (autoSaveDebounceTimer) clearTimeout(autoSaveDebounceTimer);
+  autoSaveDebounceTimer = setTimeout(async () => {
+    try {
+      await autoSaveCurrentSettings();
+    } catch (e) {
+      console.warn("Auto-save error:", e);
+    }
+  }, delay);
 }
 
 function updateGeminiKeyValidationBadges() {

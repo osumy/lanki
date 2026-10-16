@@ -14,7 +14,8 @@ import {
   getItemsForPrompt,
   getPromptCounts,
   normalizeWord,
-  normalizeQueueItem
+  normalizeQueueItem,
+  generateDeckFilename
 } from "../src/defaults.js";
 
 import {
@@ -275,15 +276,55 @@ function setupEventListeners() {
     providerTabGemini.addEventListener("click", () => switchPopupProviderTab("gemini"));
   }
   if (settingGeminiKeys) {
-    settingGeminiKeys.addEventListener("input", updatePopupGeminiKeyValidationBadges);
+    settingGeminiKeys.addEventListener("input", () => {
+      updatePopupGeminiKeyValidationBadges();
+      debouncedAutoSave(500);
+    });
+    settingGeminiKeys.addEventListener("blur", () => autoSaveCurrentSettings());
   }
   if (toggleGeminiKeysMask) {
     toggleGeminiKeysMask.addEventListener("click", handleTogglePopupGeminiKeysMask);
   }
+  if (settingGeminiModel) {
+    settingGeminiModel.addEventListener("change", () => autoSaveCurrentSettings());
+  }
+  if (settingGeminiStrategy) {
+    settingGeminiStrategy.addEventListener("change", () => autoSaveCurrentSettings());
+  }
 
-  // Vision settings triggers
+  // Custom proxy & general settings auto-save
+  if (settingBaseUrl) {
+    settingBaseUrl.addEventListener("input", () => debouncedAutoSave(500));
+  }
+  if (settingApiKey) {
+    settingApiKey.addEventListener("input", () => debouncedAutoSave(500));
+  }
+  if (settingModel) {
+    settingModel.addEventListener("input", () => debouncedAutoSave(500));
+  }
+  if (settingChunkSize) {
+    settingChunkSize.addEventListener("input", () => debouncedAutoSave(500));
+    settingChunkSize.addEventListener("change", () => autoSaveCurrentSettings());
+  }
+  if (settingAutoClear) {
+    settingAutoClear.addEventListener("change", () => autoSaveCurrentSettings());
+  }
+
+  // Vision settings triggers & auto-save
   if (settingDedicatedVision) {
-    settingDedicatedVision.addEventListener("change", toggleVisionFields);
+    settingDedicatedVision.addEventListener("change", () => {
+      toggleVisionFields();
+      autoSaveCurrentSettings();
+    });
+  }
+  if (settingVisionBaseUrl) {
+    settingVisionBaseUrl.addEventListener("input", () => debouncedAutoSave(500));
+  }
+  if (settingVisionModel) {
+    settingVisionModel.addEventListener("input", () => debouncedAutoSave(500));
+  }
+  if (settingVisionApiKey) {
+    settingVisionApiKey.addEventListener("input", () => debouncedAutoSave(500));
   }
   if (testVisionBtn) {
     testVisionBtn.addEventListener("click", handleTestVisionConnection);
@@ -292,6 +333,7 @@ function setupEventListeners() {
     chip.addEventListener("click", () => {
       settingVisionBaseUrl.value = chip.dataset.url;
       settingVisionModel.value = chip.dataset.model;
+      autoSaveCurrentSettings();
     });
   });
 
@@ -326,6 +368,7 @@ function setupEventListeners() {
   document.querySelectorAll(".chip-btn:not(.vision-preset-btn)").forEach(chip => {
     chip.addEventListener("click", () => {
       settingModel.value = chip.dataset.model;
+      autoSaveCurrentSettings();
     });
   });
 
@@ -632,7 +675,9 @@ async function handleCopyTsv() {
 
 async function handleDownloadAgain() {
   if (lastGeneratedTsv) {
-    await triggerTsvDownload(lastGeneratedTsv, lastGeneratedFilename);
+    const activePrompt = getActivePrompt(currentSettings);
+    const filename = lastGeneratedFilename || generateDeckFilename(activePrompt?.title || "deck");
+    await triggerTsvDownload(lastGeneratedTsv, filename, activePrompt?.title || "deck");
     showAlert("Download started!", "success", 2000);
   }
 }
@@ -689,7 +734,7 @@ function syncJobStateToUI(job) {
     unlockQueueControls();
 
     lastGeneratedTsv = job.tsvContent;
-    lastGeneratedFilename = job.filename || `lanki_deck_${Date.now()}.txt`;
+    lastGeneratedFilename = job.filename || generateDeckFilename(job.promptTitle || "deck");
 
     if (summaryCardsCount) summaryCardsCount.textContent = String(job.completedWords || 0);
     if (summaryBatchesCount) summaryBatchesCount.textContent = String(job.totalChunks || 1);
@@ -750,9 +795,10 @@ function unlockQueueControls() {
 // Settings Functions
 // -------------------------------------------------------------
 
-function switchPopupProviderTab(provider, updateState = true) {
+async function switchPopupProviderTab(provider, updateState = true) {
   if (updateState && currentSettings) {
     currentSettings.llmProvider = provider;
+    await saveSettings(currentSettings);
   }
 
   if (provider === "gemini") {
@@ -804,7 +850,69 @@ function handleTogglePopupGeminiKeysMask() {
   const isMasked = wrapper.classList.contains("masked");
   if (toggleGeminiKeysMask) {
     toggleGeminiKeysMask.textContent = isMasked ? "👁️" : "🙈";
+    toggleGeminiKeysMask.title = isMasked ? "Show keys" : "Hide keys";
+    toggleGeminiKeysMask.setAttribute("aria-label", isMasked ? "Show Gemini Keys" : "Hide Gemini Keys");
   }
+}
+
+let autoSaveDebounceTimer = null;
+
+async function autoSaveCurrentSettings() {
+  if (!currentSettings) return;
+
+  const chunkSize = parseInt(settingChunkSize?.value, 10);
+  if (!isNaN(chunkSize) && chunkSize >= 1 && chunkSize <= 50) {
+    currentSettings.chunkSize = chunkSize;
+  }
+
+  const isGemini = providerTabGemini?.classList.contains("active");
+  currentSettings.llmProvider = isGemini ? "gemini" : "custom";
+
+  if (settingBaseUrl) currentSettings.apiBaseUrl = settingBaseUrl.value.trim();
+  if (settingApiKey) currentSettings.apiKey = settingApiKey.value.trim();
+  if (settingModel) currentSettings.model = settingModel.value.trim() || "gpt-4o-mini";
+  if (settingAutoClear) currentSettings.autoClearOnExport = settingAutoClear.checked;
+
+  if (settingGeminiKeys) {
+    const parsedKeys = parseGeminiKeys(settingGeminiKeys.value || "");
+    currentSettings.geminiApiKeys = parsedKeys;
+    currentSettings.geminiKeys = parsedKeys;
+  }
+  if (settingGeminiModel) {
+    currentSettings.geminiModel = settingGeminiModel.value;
+  }
+  if (settingGeminiStrategy) {
+    currentSettings.geminiStrategy = settingGeminiStrategy.value;
+    currentSettings.geminiRoutingStrategy = currentSettings.geminiStrategy;
+  }
+
+  currentSettings.ocrEngine = ocrTabLocal?.classList.contains("active") ? "local" : "api";
+
+  if (settingDedicatedVision) {
+    currentSettings.useDedicatedVision = settingDedicatedVision.checked;
+  }
+  if (settingVisionBaseUrl) {
+    currentSettings.visionBaseUrl = settingVisionBaseUrl.value.trim() || "http://localhost:1234/v1";
+  }
+  if (settingVisionModel) {
+    currentSettings.visionModel = settingVisionModel.value.trim() || "qwen2-vl";
+  }
+  if (settingVisionApiKey) {
+    currentSettings.visionApiKey = settingVisionApiKey.value.trim();
+  }
+
+  await saveSettings(currentSettings);
+}
+
+function debouncedAutoSave(delay = 400) {
+  if (autoSaveDebounceTimer) clearTimeout(autoSaveDebounceTimer);
+  autoSaveDebounceTimer = setTimeout(async () => {
+    try {
+      await autoSaveCurrentSettings();
+    } catch (e) {
+      console.warn("Auto-save error:", e);
+    }
+  }, delay);
 }
 
 function renderSettings() {
@@ -1493,9 +1601,10 @@ async function handlePresetChange(e) {
   if (testLocalOcrResult) testLocalOcrResult.classList.add("hidden");
 }
 
-function switchOcrEngineTab(engine, updateState = true) {
+async function switchOcrEngineTab(engine, updateState = true) {
   if (updateState && currentSettings) {
     currentSettings.ocrEngine = engine;
+    await saveSettings(currentSettings);
   }
 
   if (engine === "local") {

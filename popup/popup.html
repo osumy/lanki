@@ -153,10 +153,14 @@
             <span class="metric-num" id="summary-batches-count">0</span>
             <span class="metric-label">Batches</span>
           </div>
-          <div class="summary-metric-card">
-            <span class="metric-num" id="summary-duration-sec">0.0s</span>
-            <span class="metric-label">Generation Time</span>
-          </div>
+        </div>
+
+        <!-- Generation Time Tag (Corner text under stats box) -->
+        <div class="completed-time-row">
+          <span class="completed-duration-badge" title="Generation Duration">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <span id="summary-duration-sec">0.0s</span>
+          </span>
         </div>
 
         <!-- Actions Bar (Download TSV, Copy TSV, Dismiss) -->
@@ -299,14 +303,14 @@
                 <span class="badge-tag error hidden" id="key-count-invalid">0 invalid</span>
               </div>
             </div>
-            <div class="textarea-wrapper">
+            <div class="textarea-wrapper" id="gemini-keys-wrapper">
               <textarea
                 id="setting-gemini-keys"
                 rows="3"
                 placeholder="AIzaSyA...&#10;AIzaSyB..."
                 spellcheck="false"
               ></textarea>
-              <button type="button" id="toggle-gemini-keys-mask" class="btn-addon-float" title="Toggle key masking">👁️</button>
+              <button type="button" id="toggle-gemini-keys-mask" class="btn-addon-float" title="Hide keys" aria-label="Toggle key masking">🙈</button>
             </div>
           </div>
 

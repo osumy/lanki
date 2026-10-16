@@ -160,8 +160,34 @@ body {
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding: 14px 16px;
+  min-height: 0;
+}
+
+.tab-content::-webkit-scrollbar {
+  width: 5px;
+}
+
+.tab-content::-webkit-scrollbar-thumb {
+  background: var(--bg-surface-hover);
+  border-radius: 4px;
+}
+
+#tab-queue {
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+}
+
+#tab-queue::-webkit-scrollbar {
+  width: 5px;
+}
+
+#tab-queue::-webkit-scrollbar-thumb {
+  background: var(--bg-surface-hover);
+  border-radius: 4px;
 }
 
 .tab-content.hidden {
@@ -1793,8 +1819,29 @@ body {
 
 .completed-stats-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr;
   gap: 8px;
+}
+
+.completed-time-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: -4px;
+  margin-bottom: 2px;
+}
+
+.completed-duration-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-muted, #64748b);
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-weight: 500;
 }
 
 .summary-metric-card {
@@ -1937,7 +1984,66 @@ body {
   gap: 12px;
 }
 
+/* Gemini Keys Textarea Wrapper & Privacy Masking */
+.textarea-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.textarea-wrapper textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 36px 8px 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 11.5px;
+  line-height: 1.5;
+  outline: none;
+  resize: vertical;
+  transition: border-color 0.15s ease, filter 0.2s ease, opacity 0.2s ease;
+}
+
+.textarea-wrapper textarea:focus {
+  border-color: var(--border-focus);
+}
+
+/* Masked state: disc bullet characters + elegant blur */
+.textarea-wrapper.masked textarea {
+  -webkit-text-security: disc !important;
+  filter: blur(5px);
+  user-select: none;
+}
+
+.btn-addon-float {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 3px 6px;
+  font-size: 13px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  z-index: 2;
+}
+
+.btn-addon-float:hover {
+  background: var(--bg-surface-hover);
+  border-color: var(--primary);
+  color: #fff;
+}
+
 .hidden {
   display: none !important;
 }
+
 

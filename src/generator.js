@@ -1,6 +1,6 @@
-import { ANKI_HEADER_LINES, extractAnkiHeaderLines, normalizeHeaderLines } from "./defaults.js";
+import { ANKI_HEADER_LINES, extractAnkiHeaderLines, normalizeHeaderLines, generateDeckFilename } from "./defaults.js";
 import { GeminiRouter } from "./router.js";
-export { GeminiRouter };
+export { GeminiRouter, generateDeckFilename };
 
 /**
  * Split an array of items into chunks of a specified size.
@@ -472,14 +472,17 @@ export async function generateAnkiDeck({
 /**
  * Triggers browser download of the consolidated Anki TSV file.
  */
-export async function triggerTsvDownload(tsvContent, filename) {
+export async function triggerTsvDownload(tsvContent, filename, promptTitle = "deck") {
   // \uFEFF is UTF-8 BOM, ensuring Windows Anki/Excel properly decodes Persian characters
   const blob = new Blob(["\uFEFF" + tsvContent], {
     type: "text/plain;charset=utf-8"
   });
   const url = URL.createObjectURL(blob);
 
-  let finalName = filename || `lanki_anki_deck_${getTimestampString()}.txt`;
+  let finalName = filename;
+  if (!finalName || finalName.trim() === "" || finalName === "download" || finalName === "download.txt") {
+    finalName = generateDeckFilename(promptTitle);
+  }
   if (!finalName.toLowerCase().endsWith(".txt")) {
     finalName = finalName.replace(/\.[^/.]+$/, "") + ".txt";
   }
@@ -489,7 +492,8 @@ export async function triggerTsvDownload(tsvContent, filename) {
       await chrome.downloads.download({
         url,
         filename: finalName,
-        saveAs: false
+        saveAs: false,
+        conflictAction: "uniquify"
       });
     } else {
       // Fallback standard HTML5 anchor download

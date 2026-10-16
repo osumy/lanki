@@ -12,7 +12,8 @@ import {
   extractAnkiHeaderLines,
   saveQueue,
   getSettings,
-  getActivePrompt
+  getActivePrompt,
+  generateDeckFilename
 } from "../src/defaults.js";
 
 import {
@@ -96,8 +97,7 @@ export async function startBatchJob({ words, settings, promptId, promptTitle }) 
   const chunks = chunkArray(words, chunkSize);
   const totalChunks = chunks.length;
 
-  const safeTitle = effectivePromptTitle.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
-  const filename = `lanki_${safeTitle || "deck"}_${Date.now()}.txt`;
+  const filename = generateDeckFilename(effectivePromptTitle);
   const modelUsed = effectiveSettings.llmProvider === "gemini"
     ? (effectiveSettings.geminiModel || "gemini-2.5-flash")
     : (effectiveSettings.model || "custom");
@@ -427,9 +427,9 @@ export async function downloadTsvFromServiceWorker(tsvContent, filename) {
     base64Data = Buffer.from(utf8Bytes).toString("base64");
   }
 
-  const dataUrl = `data:text/tab-separated-values;charset=utf-8;base64,${base64Data}`;
+  const dataUrl = `data:text/plain;charset=utf-8;base64,${base64Data}`;
 
-  let safeFilename = filename || `lanki_anki_deck_${Date.now()}.txt`;
+  let safeFilename = filename || generateDeckFilename("deck");
   if (!safeFilename.toLowerCase().endsWith(".txt")) {
     safeFilename += ".txt";
   }

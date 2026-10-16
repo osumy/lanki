@@ -1138,8 +1138,9 @@ body {
   outline: none;
 }
 
-/* Masked state: elegant blur and slight fade */
+/* Masked state: elegant blur, bullet discs, and slight fade */
 .textarea-wrapper.masked textarea {
+  -webkit-text-security: disc !important;
   filter: blur(6px);
   opacity: 0.35;
   user-select: none;

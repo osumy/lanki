@@ -388,3 +388,24 @@ export async function updateBadge(count) {
     console.error("Failed to update badge:", err);
   }
 }
+
+/**
+ * Generates a consistent, filesystem-safe filename for exported Anki decks.
+ * Format: [promptTitle]_[randomId].txt
+ * Always combines prompt name, a random id, and .txt format.
+ *
+ * @param {string} [promptTitle] - The user-friendly prompt title (e.g. "Idiom", "IELTS Lexicographer")
+ * @returns {string} - Filename ending with .txt (e.g. "Idiom_a1b2c3d4.txt")
+ */
+export function generateDeckFilename(promptTitle) {
+  const cleanTitle = (promptTitle || "deck")
+    .trim()
+    .replace(/[<>:"/\\|?*#%&{}\\<>+~`=!;:@^$\[\]\x00-\x1F]/g, "")
+    .replace(/\s+/g, "_")
+    .replace(/^_+|_+$/g, "");
+
+  const randomId = Math.random().toString(36).substring(2, 10);
+  const base = cleanTitle || "deck";
+  return `${base}_${randomId}.txt`;
+}
+
