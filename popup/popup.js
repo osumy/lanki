@@ -18,12 +18,13 @@ import {
 } from "../src/defaults.js";
 
 import {
-  generateAnkiDeck,
   triggerTsvDownload,
   testApiConnection,
   testVisionConnection,
   generateAnkiHeaderWithLlm
 } from "../src/generator.js";
+
+import { parseGeminiKeys, maskApiKey } from "../src/router.js";
 
 // DOM Elements - Navigation & Layout
 const tabQueueBtn = document.getElementById("tab-queue-btn");
@@ -49,25 +50,48 @@ const generateBtnText = document.getElementById("generate-btn-text");
 const queueActivePromptSelect = document.getElementById("queue-active-prompt-select");
 const queueManagePromptsBtn = document.getElementById("queue-manage-prompts-btn");
 
-// DOM Elements - Progress & Success Panels
-const progressPanel = document.getElementById("progress-panel");
-const progressTitle = document.getElementById("progress-title");
-const progressPercent = document.getElementById("progress-percent");
-const progressBarFill = document.getElementById("progress-bar-fill");
-const progressDetail = document.getElementById("progress-detail");
-const cancelGenBtn = document.getElementById("cancel-gen-btn");
+// DOM Elements - In-Flight Background Progress Container
+const popupInflightContainer = document.getElementById("popup-inflight-container") || document.getElementById("progress-panel");
+const inflightDeckTitle = document.getElementById("inflight-deck-title");
+const inflightPercentBadge = document.getElementById("inflight-percent-badge");
+const inflightProgressBar = document.getElementById("inflight-progress-bar") || document.getElementById("progress-bar-fill");
+const inflightBatchCounter = document.getElementById("inflight-batch-counter");
+const inflightCardsCounter = document.getElementById("inflight-cards-counter");
+const inflightEnginePill = document.getElementById("inflight-engine-pill");
+const inflightStatusDetail = document.getElementById("inflight-status-detail") || document.getElementById("progress-detail");
+const popupCancelJobBtn = document.getElementById("popup-cancel-job-btn") || document.getElementById("cancel-gen-btn");
 
-const successPanel = document.getElementById("success-panel");
-const successMessage = document.getElementById("success-message");
-const downloadAgainBtn = document.getElementById("download-again-btn");
-const dismissSuccessBtn = document.getElementById("dismiss-success-btn");
+// DOM Elements - Completed Deck Summary Container
+const popupCompletedContainer = document.getElementById("popup-completed-container") || document.getElementById("success-panel");
+const completedDeckSubtitle = document.getElementById("completed-deck-subtitle");
+const summaryCardsCount = document.getElementById("summary-cards-count");
+const summaryBatchesCount = document.getElementById("summary-batches-count");
+const summaryDurationSec = document.getElementById("summary-duration-sec");
+const summaryDownloadBtn = document.getElementById("summary-download-btn") || document.getElementById("download-again-btn");
+const summaryCopyBtn = document.getElementById("summary-copy-btn");
+const summaryDismissBtn = document.getElementById("summary-dismiss-btn") || document.getElementById("dismiss-success-btn");
+const toggleTsvPreviewBtn = document.getElementById("toggle-tsv-preview-btn");
+const tsvPreviewArrow = document.getElementById("tsv-preview-arrow");
+const tsvPreviewBody = document.getElementById("tsv-preview-body");
+const tsvPreviewContent = document.getElementById("tsv-preview-content");
 
 // DOM Elements - Settings Tab
 const settingsForm = document.getElementById("settings-form");
+const providerTabCustom = document.getElementById("provider-tab-custom");
+const providerTabGemini = document.getElementById("provider-tab-gemini");
+const providerPanelCustom = document.getElementById("provider-panel-custom");
+const providerPanelGemini = document.getElementById("provider-panel-gemini");
 const settingBaseUrl = document.getElementById("setting-base-url");
 const settingApiKey = document.getElementById("setting-api-key");
 const toggleKeyVisibility = document.getElementById("toggle-key-visibility");
 const settingModel = document.getElementById("setting-model");
+const settingGeminiKeys = document.getElementById("setting-gemini-keys");
+const toggleGeminiKeysMask = document.getElementById("toggle-gemini-keys-mask");
+const keyCountTotal = document.getElementById("key-count-total");
+const keyCountValid = document.getElementById("key-count-valid");
+const keyCountInvalid = document.getElementById("key-count-invalid");
+const settingGeminiModel = document.getElementById("setting-gemini-model");
+const settingGeminiStrategy = document.getElementById("setting-gemini-strategy");
 const settingChunkSize = document.getElementById("setting-chunk-size");
 const settingAutoClear = document.getElementById("setting-auto-clear");
 const testConnectionBtn = document.getElementById("test-connection-btn");
@@ -140,6 +164,7 @@ let currentSettings = null;
 let isGenerating = false;
 let abortController = null;
 let lastGeneratedTsv = null;
+let lastGeneratedFilename = null;
 let bannerTimeout = null;
 let isPreviewCollapsed = false;
 
@@ -150,6 +175,14 @@ document.addEventListener("DOMContentLoaded", async () => {
   renderQueue();
   renderSettings();
   renderPromptsUI();
+
+  // Reactive observation of persistent background generation job
+  try {
+    const jobRes = await chrome.storage.local.get("generationJob");
+    syncJobStateToUI(jobRes?.generationJob || null);
+  } catch (err) {
+    console.warn("Could not check generationJob state:", err);
+  }
 });
 
 async function loadState() {
@@ -169,9 +202,23 @@ function setupEventListeners() {
   }
   clearAllBtn.addEventListener("click", handleClearAll);
   generateBtn.addEventListener("click", handleGenerateDeck);
-  cancelGenBtn.addEventListener("click", handleCancelGeneration);
-  downloadAgainBtn.addEventListener("click", handleDownloadAgain);
-  dismissSuccessBtn.addEventListener("click", () => successPanel.classList.add("hidden"));
+
+  // In-flight & Completion actions
+  if (popupCancelJobBtn) {
+    popupCancelJobBtn.addEventListener("click", handleCancelGeneration);
+  }
+  if (summaryDownloadBtn) {
+    summaryDownloadBtn.addEventListener("click", handleDownloadAgain);
+  }
+  if (summaryCopyBtn) {
+    summaryCopyBtn.addEventListener("click", handleCopyTsv);
+  }
+  if (summaryDismissBtn) {
+    summaryDismissBtn.addEventListener("click", handleDismissJob);
+  }
+  if (toggleTsvPreviewBtn) {
+    toggleTsvPreviewBtn.addEventListener("click", handleToggleTsvPreview);
+  }
 
   // Prompt selectors (Queue & Settings)
   queueActivePromptSelect.addEventListener("change", (e) => handlePromptSelectChange(e.target.value));
@@ -219,6 +266,20 @@ function setupEventListeners() {
   settingsForm.addEventListener("submit", handleSaveSettings);
   toggleKeyVisibility.addEventListener("click", handleToggleKeyVisibility);
   testConnectionBtn.addEventListener("click", handleTestConnection);
+
+  // Provider mode tabs in Settings
+  if (providerTabCustom) {
+    providerTabCustom.addEventListener("click", () => switchPopupProviderTab("custom"));
+  }
+  if (providerTabGemini) {
+    providerTabGemini.addEventListener("click", () => switchPopupProviderTab("gemini"));
+  }
+  if (settingGeminiKeys) {
+    settingGeminiKeys.addEventListener("input", updatePopupGeminiKeyValidationBadges);
+  }
+  if (toggleGeminiKeysMask) {
+    toggleGeminiKeysMask.addEventListener("click", handleTogglePopupGeminiKeysMask);
+  }
 
   // Vision settings triggers
   if (settingDedicatedVision) {
@@ -268,9 +329,12 @@ function setupEventListeners() {
     });
   });
 
-  // Storage listener to update queue or settings if modified elsewhere
+  // Storage listener to update queue, settings, or reactive background generationJob
   chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName === "local") {
+      if (changes.generationJob) {
+        syncJobStateToUI(changes.generationJob.newValue);
+      }
       if (changes.wordsQueue) {
         currentQueue = changes.wordsQueue.newValue || [];
         renderQueue();
@@ -490,124 +554,287 @@ async function handleGenerateDeck() {
 
   currentSettings.promptTemplate = activePrompt.content;
 
-  isGenerating = true;
-  abortController = new AbortController();
-  successPanel.classList.add("hidden");
-  progressPanel.classList.remove("hidden");
+  lockQueueControls();
+  popupCompletedContainer?.classList.add("hidden");
+  popupInflightContainer?.classList.remove("hidden");
 
-  // UI locks
-  generateBtn.disabled = true;
-  clearAllBtn.style.display = "none";
-  addWordForm.querySelector("button").disabled = true;
-  wordInput.disabled = true;
-
-  const chunkSize = currentSettings?.chunkSize || 10;
-  const totalBatches = Math.ceil(wordsToProcess.length / chunkSize);
-
-  updateProgressUI({
-    currentChunk: 1,
-    totalChunks: totalBatches,
-    percent: 0,
-    message: `Starting batch 1 of ${totalBatches}...`
-  });
+  if (inflightDeckTitle) inflightDeckTitle.textContent = `Generating ${activePromptTitle}...`;
+  if (inflightPercentBadge) inflightPercentBadge.textContent = "0%";
+  if (inflightProgressBar) inflightProgressBar.style.width = "0%";
+  if (inflightStatusDetail) inflightStatusDetail.textContent = "Connecting to background generator...";
 
   try {
-    const result = await generateAnkiDeck({
+    const res = await chrome.runtime.sendMessage({
+      target: "background",
+      action: "START_GENERATION",
       words: wordsToProcess,
-      settings: currentSettings,
-      signal: abortController.signal,
-      onProgress: (prog) => {
-        if (prog.status === "processing") {
-          const pct = Math.round(((prog.currentChunk - 1) / prog.totalChunks) * 100);
-          updateProgressUI({
-            currentChunk: prog.currentChunk,
-            totalChunks: prog.totalChunks,
-            percent: pct,
-            message: `Batch ${prog.currentChunk}/${prog.totalChunks}: processing ${prog.chunkWords.length} words...`
-          });
-        } else if (prog.status === "chunk_finished") {
-          const pct = Math.round((prog.currentChunk / prog.totalChunks) * 100);
-          updateProgressUI({
-            currentChunk: prog.currentChunk,
-            totalChunks: prog.totalChunks,
-            percent: pct,
-            message: `Batch ${prog.currentChunk}/${prog.totalChunks} completed (${prog.completedWords}/${prog.totalWords} cards).`
-          });
-        }
-      }
+      promptId: activePromptId,
+      promptTitle: activePromptTitle,
+      settings: currentSettings
     });
 
-    lastGeneratedTsv = result.tsvContent;
-    const safeTitle = activePromptTitle.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
-    const filename = `lanki_${safeTitle || "deck"}_${Date.now()}.txt`;
-    await triggerTsvDownload(lastGeneratedTsv, filename);
-
-    // Show success panel
-    successPanel.classList.remove("hidden");
-    successMessage.textContent = `Downloaded 1 file containing ${result.rowCount} flashcard entries for "${activePromptTitle}".`;
-
-    if (result.errors && result.errors.length > 0) {
-      showAlert(`Completed with warnings:\n${result.errors.join("; ")}`, "info", 6000);
-    } else {
-      showAlert(`All ${result.rowCount} cards generated successfully for "${activePromptTitle}"!`, "success", 4000);
-    }
-
-    // Auto-clear only the exported items belonging to this prompt!
-    if (currentSettings.autoClearOnExport) {
-      currentQueue = currentQueue.filter(item => (item.promptId || "") !== activePromptId);
-      await saveQueue(currentQueue);
-      renderQueue();
-      renderPromptsUI();
+    if (!res || !res.success) {
+      unlockQueueControls();
+      popupInflightContainer?.classList.add("hidden");
+      const errDetail = !res
+        ? "Background service worker not responding. Please open chrome://extensions and click Reload (🔄) on Lanki, then try again."
+        : (res.error || "Unknown error");
+      showAlert(`Could not start generation: ${errDetail}`, "error", 7000);
     }
   } catch (err) {
-    if (err.name === "AbortError") {
-      showAlert("Generation cancelled by user.", "info", 3000);
-    } else {
-      console.error("Generation error:", err);
-      showAlert(`Error: ${err.message}`, "error", 8000);
-    }
-  } finally {
-    isGenerating = false;
-    abortController = null;
-    progressPanel.classList.add("hidden");
-    addWordForm.querySelector("button").disabled = false;
-    wordInput.disabled = false;
-    renderQueue();
+    unlockQueueControls();
+    popupInflightContainer?.classList.add("hidden");
+    showAlert(`Failed to dispatch job: ${err.message}`, "error", 6000);
   }
 }
 
-function updateProgressUI({ currentChunk, totalChunks, percent, message }) {
-  progressTitle.textContent = `Batch ${currentChunk} of ${totalChunks}`;
-  progressPercent.textContent = `${percent}%`;
-  progressBarFill.style.width = `${percent}%`;
-  progressDetail.textContent = message;
+async function handleCancelGeneration() {
+  try {
+    if (inflightStatusDetail) inflightStatusDetail.textContent = "Cancelling generation...";
+    await chrome.runtime.sendMessage({ target: "background", action: "CANCEL_GENERATION" });
+  } catch (err) {
+    console.warn("Cancel error:", err);
+  }
 }
 
-function handleCancelGeneration() {
-  if (abortController) {
-    abortController.abort();
+async function handleDismissJob() {
+  try {
+    await chrome.runtime.sendMessage({ target: "background", action: "DISMISS_GENERATION_JOB" });
+  } catch (err) {
+    console.warn("Dismiss error:", err);
+  } finally {
+    popupCompletedContainer?.classList.add("hidden");
+    popupInflightContainer?.classList.add("hidden");
+    unlockQueueControls();
+  }
+}
+
+async function handleCopyTsv() {
+  if (!lastGeneratedTsv) {
+    showAlert("No TSV content to copy.", "error", 2000);
+    return;
+  }
+
+  try {
+    await navigator.clipboard.writeText(lastGeneratedTsv);
+    if (summaryCopyBtn) {
+      const origText = summaryCopyBtn.innerHTML;
+      summaryCopyBtn.innerHTML = `<span>✓ Copied!</span>`;
+      setTimeout(() => {
+        summaryCopyBtn.innerHTML = origText;
+      }, 2000);
+    }
+    showAlert("TSV copied to clipboard!", "success", 2000);
+  } catch (err) {
+    showAlert(`Copy failed: ${err.message}`, "error", 3000);
   }
 }
 
 async function handleDownloadAgain() {
   if (lastGeneratedTsv) {
-    await triggerTsvDownload(lastGeneratedTsv);
-    showAlert("Download re-triggered!", "success", 2000);
+    await triggerTsvDownload(lastGeneratedTsv, lastGeneratedFilename);
+    showAlert("Download started!", "success", 2000);
   }
+}
+
+function handleToggleTsvPreview() {
+  if (!tsvPreviewBody) return;
+  const isHidden = tsvPreviewBody.classList.contains("hidden");
+  if (isHidden) {
+    tsvPreviewBody.classList.remove("hidden");
+    if (tsvPreviewArrow) tsvPreviewArrow.textContent = "▴";
+  } else {
+    tsvPreviewBody.classList.add("hidden");
+    if (tsvPreviewArrow) tsvPreviewArrow.textContent = "▾";
+  }
+}
+
+function syncJobStateToUI(job) {
+  if (!job || job.status === "idle") {
+    popupInflightContainer?.classList.add("hidden");
+    popupCompletedContainer?.classList.add("hidden");
+    unlockQueueControls();
+    return;
+  }
+
+  if (job.status === "running") {
+    popupCompletedContainer?.classList.add("hidden");
+    popupInflightContainer?.classList.remove("hidden");
+    lockQueueControls();
+
+    const totalChunks = job.totalChunks || 1;
+    const currentChunk = job.currentChunk || 0;
+    const pct = Math.min(100, Math.max(0, Math.round((currentChunk / totalChunks) * 100)));
+
+    if (inflightDeckTitle) inflightDeckTitle.textContent = `Generating ${job.promptTitle || "Anki Deck"}...`;
+    if (inflightPercentBadge) inflightPercentBadge.textContent = `${pct}%`;
+    if (inflightProgressBar) inflightProgressBar.style.width = `${pct}%`;
+    if (inflightBatchCounter) inflightBatchCounter.textContent = `Batch ${Math.max(1, currentChunk)} of ${totalChunks}`;
+    if (inflightCardsCounter) inflightCardsCounter.textContent = `${job.completedWords || 0} / ${job.totalWords || 0} words`;
+    if (inflightEnginePill) {
+      const providerLabel = job.settings?.llmProvider === "gemini" ? "Direct Gemini" : "Custom";
+      inflightEnginePill.textContent = `${providerLabel} - ${job.modelUsed || "gemini-2.5-flash"}`;
+    }
+    if (inflightStatusDetail) {
+      inflightStatusDetail.textContent = currentChunk > 0
+        ? `Processing chunk ${currentChunk} of ${totalChunks}...`
+        : "Starting background batch generation...";
+    }
+    return;
+  }
+
+  if (job.status === "completed") {
+    popupInflightContainer?.classList.add("hidden");
+    popupCompletedContainer?.classList.remove("hidden");
+    unlockQueueControls();
+
+    lastGeneratedTsv = job.tsvContent;
+    lastGeneratedFilename = job.filename || `lanki_deck_${Date.now()}.txt`;
+
+    if (summaryCardsCount) summaryCardsCount.textContent = String(job.completedWords || 0);
+    if (summaryBatchesCount) summaryBatchesCount.textContent = String(job.totalChunks || 1);
+    if (summaryDurationSec) {
+      const sec = (job.startTime && job.endTime) ? ((job.endTime - job.startTime) / 1000).toFixed(1) + "s" : "Done";
+      summaryDurationSec.textContent = sec;
+    }
+    if (completedDeckSubtitle) {
+      completedDeckSubtitle.textContent = `Generated ${job.completedWords || 0} cards with ${job.promptTitle || "Anki Deck"}`;
+    }
+    if (tsvPreviewContent) {
+      const rows = (job.tsvContent || "").split("\n").filter(Boolean);
+      tsvPreviewContent.textContent = rows.slice(0, 4).join("\n") + (rows.length > 4 ? `\n... (${rows.length - 4} more rows)` : "");
+    }
+    return;
+  }
+
+  if (job.status === "canceled") {
+    popupInflightContainer?.classList.add("hidden");
+    popupCompletedContainer?.classList.add("hidden");
+    unlockQueueControls();
+    showAlert("Generation job was cancelled.", "info", 3000);
+    return;
+  }
+
+  if (job.status === "error") {
+    popupInflightContainer?.classList.add("hidden");
+    popupCompletedContainer?.classList.add("hidden");
+    unlockQueueControls();
+    showAlert(`Generation error: ${job.errorMessage || "Unknown error"}`, "error", 6000);
+    return;
+  }
+}
+
+function lockQueueControls() {
+  isGenerating = true;
+  if (generateBtn) generateBtn.disabled = true;
+  if (clearAllBtn) clearAllBtn.disabled = true;
+  if (wordInput) wordInput.disabled = true;
+  if (contextInput) contextInput.disabled = true;
+  const addBtn = addWordForm?.querySelector("button[type='submit']");
+  if (addBtn) addBtn.disabled = true;
+}
+
+function unlockQueueControls() {
+  isGenerating = false;
+  const activePrompt = getActivePrompt(currentSettings);
+  const activeQueue = getItemsForPrompt(currentQueue, activePrompt?.id || "");
+  if (generateBtn) generateBtn.disabled = activeQueue.length === 0;
+  if (clearAllBtn) clearAllBtn.disabled = false;
+  if (wordInput) wordInput.disabled = false;
+  if (contextInput) contextInput.disabled = false;
+  const addBtn = addWordForm?.querySelector("button[type='submit']");
+  if (addBtn) addBtn.disabled = false;
 }
 
 // -------------------------------------------------------------
 // Settings Functions
 // -------------------------------------------------------------
 
+function switchPopupProviderTab(provider, updateState = true) {
+  if (updateState && currentSettings) {
+    currentSettings.llmProvider = provider;
+  }
+
+  if (provider === "gemini") {
+    providerTabGemini?.classList.add("active");
+    providerTabCustom?.classList.remove("active");
+    providerPanelGemini?.classList.remove("hidden");
+    providerPanelCustom?.classList.add("hidden");
+  } else {
+    providerTabCustom?.classList.add("active");
+    providerTabGemini?.classList.remove("active");
+    providerPanelCustom?.classList.remove("hidden");
+    providerPanelGemini?.classList.add("hidden");
+  }
+}
+
+function updatePopupGeminiKeyValidationBadges() {
+  if (!settingGeminiKeys || !keyCountTotal) return;
+  const raw = settingGeminiKeys.value || "";
+  const keys = parseGeminiKeys(raw);
+  const total = keys.length;
+
+  const validKeys = keys.filter(k => /^AIza[0-9A-Za-z\-_]{35}$/.test(k));
+  const invalidCount = total - validKeys.length;
+
+  keyCountTotal.textContent = `${total} key${total === 1 ? "" : "s"}`;
+  if (total === 0) {
+    keyCountValid?.classList.add("hidden");
+    keyCountInvalid?.classList.add("hidden");
+  } else {
+    if (keyCountValid) {
+      keyCountValid.textContent = `${validKeys.length} valid`;
+      keyCountValid.classList.remove("hidden");
+    }
+    if (keyCountInvalid) {
+      if (invalidCount > 0) {
+        keyCountInvalid.textContent = `${invalidCount} invalid`;
+        keyCountInvalid.classList.remove("hidden");
+      } else {
+        keyCountInvalid.classList.add("hidden");
+      }
+    }
+  }
+}
+
+function handleTogglePopupGeminiKeysMask() {
+  const wrapper = settingGeminiKeys?.closest(".textarea-wrapper");
+  if (!wrapper) return;
+  wrapper.classList.toggle("masked");
+  const isMasked = wrapper.classList.contains("masked");
+  if (toggleGeminiKeysMask) {
+    toggleGeminiKeysMask.textContent = isMasked ? "👁️" : "🙈";
+  }
+}
+
 function renderSettings() {
   if (!currentSettings) return;
 
+  // Provider mode
+  const activeProvider = currentSettings.llmProvider || "custom";
+  switchPopupProviderTab(activeProvider, false);
+
+  // Custom proxy
   settingBaseUrl.value = currentSettings.apiBaseUrl || "http://localhost:4000/v1";
   settingApiKey.value = currentSettings.apiKey || "";
   settingModel.value = currentSettings.model || "gpt-4o-mini";
   settingChunkSize.value = currentSettings.chunkSize || 10;
   settingAutoClear.checked = currentSettings.autoClearOnExport !== false;
+
+  // Gemini multi-key
+  const keysArray = Array.isArray(currentSettings.geminiApiKeys) && currentSettings.geminiApiKeys.length > 0
+    ? currentSettings.geminiApiKeys
+    : (Array.isArray(currentSettings.geminiKeys) ? currentSettings.geminiKeys : []);
+  if (settingGeminiKeys) {
+    settingGeminiKeys.value = keysArray.join("\n");
+    updatePopupGeminiKeyValidationBadges();
+  }
+  if (settingGeminiModel) {
+    settingGeminiModel.value = currentSettings.geminiModel || "gemini-2.5-flash";
+  }
+  if (settingGeminiStrategy) {
+    settingGeminiStrategy.value = currentSettings.geminiStrategy || currentSettings.geminiRoutingStrategy || "round-robin";
+  }
 
   // Dedicated Vision / OCR settings
   const activeEngine = currentSettings.ocrEngine || "api";
@@ -644,11 +871,27 @@ async function handleSaveSettings(e) {
     return;
   }
 
+  const isGemini = providerTabGemini?.classList.contains("active");
+  currentSettings.llmProvider = isGemini ? "gemini" : "custom";
+
   currentSettings.apiBaseUrl = settingBaseUrl.value.trim();
   currentSettings.apiKey = settingApiKey.value.trim();
   currentSettings.model = settingModel.value.trim() || "gpt-4o-mini";
   currentSettings.chunkSize = chunkSize;
   currentSettings.autoClearOnExport = settingAutoClear.checked;
+
+  if (settingGeminiKeys) {
+    const parsedKeys = parseGeminiKeys(settingGeminiKeys.value || "");
+    currentSettings.geminiApiKeys = parsedKeys;
+    currentSettings.geminiKeys = parsedKeys;
+  }
+  if (settingGeminiModel) {
+    currentSettings.geminiModel = settingGeminiModel.value;
+  }
+  if (settingGeminiStrategy) {
+    currentSettings.geminiStrategy = settingGeminiStrategy.value;
+    currentSettings.geminiRoutingStrategy = currentSettings.geminiStrategy;
+  }
 
   // OCR Engine mode
   currentSettings.ocrEngine = ocrTabLocal?.classList.contains("active") ? "local" : "api";

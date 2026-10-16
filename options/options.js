@@ -16,6 +16,7 @@ import {
 } from "../src/defaults.js";
 
 import { testApiConnection, testVisionConnection, generateAnkiHeaderWithLlm } from "../src/generator.js";
+import { parseGeminiKeys, maskApiKey } from "../src/router.js";
 
 // DOM Elements - Settings Form
 const settingsForm = document.getElementById("settings-form");
@@ -28,6 +29,27 @@ const settingAutoClear = document.getElementById("setting-auto-clear");
 const testConnectionBtn = document.getElementById("test-connection-btn");
 const testConnectionResult = document.getElementById("test-connection-result");
 const alertBanner = document.getElementById("alert-banner");
+
+// DOM Elements - LLM Provider Segmented Control & Gemini Multi-Key
+const providerTabCustom = document.getElementById("provider-tab-custom");
+const providerTabGemini = document.getElementById("provider-tab-gemini");
+const providerPanelCustom = document.getElementById("provider-panel-custom");
+const providerPanelGemini = document.getElementById("provider-panel-gemini");
+const settingGeminiKeys = document.getElementById("setting-gemini-keys");
+const toggleGeminiKeysMask = document.getElementById("toggle-gemini-keys-mask");
+const keyCountTotal = document.getElementById("key-count-total");
+const keyCountValid = document.getElementById("key-count-valid");
+const keyCountInvalid = document.getElementById("key-count-invalid");
+const settingGeminiModel = document.getElementById("setting-gemini-model");
+const geminiCustomModelRow = document.getElementById("gemini-custom-model-row");
+const settingGeminiCustomModel = document.getElementById("setting-gemini-custom-model");
+const settingGeminiStrategy = document.getElementById("setting-gemini-strategy");
+const geminiRoutingDesc = document.getElementById("gemini-routing-desc");
+const settingGeminiCooldown = document.getElementById("setting-gemini-cooldown");
+const settingGeminiRetries = document.getElementById("setting-gemini-retries");
+const btnTestGeminiKeys = document.getElementById("btn-test-gemini-keys");
+const geminiTestSummary = document.getElementById("gemini-test-summary");
+const geminiKeysResultsContainer = document.getElementById("gemini-keys-results-container");
 
 // DOM Elements - Vision & Local OCR Section
 const ocrTabApi = document.getElementById("ocr-tab-api");
@@ -102,11 +124,53 @@ document.addEventListener("DOMContentLoaded", async () => {
 });
 
 function populateForm(settings) {
+  // Provider Mode (Custom vs Gemini)
+  const activeProvider = settings.llmProvider || "custom";
+  switchLlmProviderTab(activeProvider, false);
+
+  // Custom / LiteLLM Proxy Settings
   settingBaseUrl.value = settings.apiBaseUrl || "http://localhost:4000/v1";
   settingApiKey.value = settings.apiKey || "";
   settingModel.value = settings.model || "gpt-4o-mini";
   settingChunkSize.value = settings.chunkSize || 10;
   settingAutoClear.checked = settings.autoClearOnExport !== false;
+
+  // Direct Google Gemini Multi-Key Settings
+  const keysArray = Array.isArray(settings.geminiApiKeys) && settings.geminiApiKeys.length > 0
+    ? settings.geminiApiKeys
+    : (Array.isArray(settings.geminiKeys) ? settings.geminiKeys : []);
+  if (settingGeminiKeys) {
+    settingGeminiKeys.value = keysArray.join("\n");
+    updateGeminiKeyValidationBadges();
+  }
+
+  const gModel = settings.geminiModel || "gemini-2.5-flash";
+  if (settingGeminiModel) {
+    const hasOption = Array.from(settingGeminiModel.options).some(o => o.value === gModel);
+    if (hasOption) {
+      settingGeminiModel.value = gModel;
+      if (geminiCustomModelRow) geminiCustomModelRow.classList.add("hidden");
+    } else {
+      settingGeminiModel.value = "custom";
+      if (geminiCustomModelRow) {
+        geminiCustomModelRow.classList.remove("hidden");
+        if (settingGeminiCustomModel) settingGeminiCustomModel.value = gModel;
+      }
+    }
+  }
+
+  const gStrategy = settings.geminiStrategy || settings.geminiRoutingStrategy || "round-robin";
+  if (settingGeminiStrategy) {
+    settingGeminiStrategy.value = gStrategy;
+    updateGeminiStrategyDesc(gStrategy);
+  }
+
+  if (settingGeminiCooldown) {
+    settingGeminiCooldown.value = typeof settings.geminiCooldownSeconds === "number" ? settings.geminiCooldownSeconds : 60;
+  }
+  if (settingGeminiRetries) {
+    settingGeminiRetries.value = typeof settings.geminiMaxRetries === "number" ? settings.geminiMaxRetries : 3;
+  }
 
   // Dedicated Vision / OCR settings
   const activeEngine = settings.ocrEngine || "api";
@@ -138,6 +202,36 @@ function setupListeners() {
   settingsForm.addEventListener("submit", handleSaveSettings);
   toggleKeyVisibility.addEventListener("click", handleToggleKeyVisibility);
   testConnectionBtn.addEventListener("click", handleTestConnection);
+
+  // LLM Provider Tab Switching
+  if (providerTabCustom) {
+    providerTabCustom.addEventListener("click", () => switchLlmProviderTab("custom"));
+  }
+  if (providerTabGemini) {
+    providerTabGemini.addEventListener("click", () => switchLlmProviderTab("gemini"));
+  }
+
+  // Gemini Multi-Key Listeners
+  if (settingGeminiKeys) {
+    settingGeminiKeys.addEventListener("input", updateGeminiKeyValidationBadges);
+    settingGeminiKeys.addEventListener("blur", updateGeminiKeyValidationBadges);
+  }
+  if (toggleGeminiKeysMask) {
+    toggleGeminiKeysMask.addEventListener("click", handleToggleGeminiKeysMask);
+  }
+  const maskOverlay = document.getElementById("gemini-mask-overlay");
+  if (maskOverlay) {
+    maskOverlay.addEventListener("click", handleToggleGeminiKeysMask);
+  }
+  if (settingGeminiModel) {
+    settingGeminiModel.addEventListener("change", handleGeminiModelChange);
+  }
+  if (settingGeminiStrategy) {
+    settingGeminiStrategy.addEventListener("change", (e) => updateGeminiStrategyDesc(e.target.value));
+  }
+  if (btnTestGeminiKeys) {
+    btnTestGeminiKeys.addEventListener("click", handleTestGeminiKeys);
+  }
 
   // Vision triggers
   if (settingDedicatedVision) {
@@ -686,11 +780,36 @@ async function handleSaveSettings(e) {
     return;
   }
 
+  // LLM Provider mode (Custom vs Gemini)
+  const isGemini = providerTabGemini?.classList.contains("active");
+  currentSettings.llmProvider = isGemini ? "gemini" : "custom";
+
+  // Custom / LiteLLM Proxy settings
   currentSettings.apiBaseUrl = settingBaseUrl.value.trim();
   currentSettings.apiKey = settingApiKey.value.trim();
   currentSettings.model = settingModel.value.trim() || "gpt-4o-mini";
   currentSettings.chunkSize = chunkSize;
   currentSettings.autoClearOnExport = settingAutoClear.checked;
+
+  // Direct Google Gemini Multi-Key settings
+  const rawGeminiKeys = settingGeminiKeys?.value || "";
+  const parsedGeminiKeys = parseGeminiKeys(rawGeminiKeys);
+  currentSettings.geminiApiKeys = parsedGeminiKeys;
+  currentSettings.geminiKeys = parsedGeminiKeys;
+
+  let selectedGeminiModel = settingGeminiModel?.value || "gemini-2.5-flash";
+  if (selectedGeminiModel === "custom" && settingGeminiCustomModel?.value.trim()) {
+    selectedGeminiModel = settingGeminiCustomModel.value.trim();
+  }
+  currentSettings.geminiModel = selectedGeminiModel;
+  currentSettings.geminiStrategy = settingGeminiStrategy?.value || "round-robin";
+  currentSettings.geminiRoutingStrategy = currentSettings.geminiStrategy;
+
+  const cd = parseInt(settingGeminiCooldown?.value, 10);
+  currentSettings.geminiCooldownSeconds = (!isNaN(cd) && cd >= 5) ? cd : 60;
+
+  const retries = parseInt(settingGeminiRetries?.value, 10);
+  currentSettings.geminiMaxRetries = (!isNaN(retries) && retries >= 0) ? retries : 3;
 
   // OCR Engine mode
   currentSettings.ocrEngine = ocrTabLocal?.classList.contains("active") ? "local" : "api";
@@ -724,6 +843,189 @@ async function handleSaveSettings(e) {
 
   await saveSettings(currentSettings);
   showAlert("Settings saved successfully!", "success");
+}
+
+function switchLlmProviderTab(provider, updateState = true) {
+  if (updateState && currentSettings) {
+    currentSettings.llmProvider = provider;
+  }
+
+  if (provider === "gemini") {
+    providerTabGemini?.classList.add("active");
+    providerTabCustom?.classList.remove("active");
+    providerTabGemini?.setAttribute("aria-selected", "true");
+    providerTabCustom?.setAttribute("aria-selected", "false");
+    providerPanelGemini?.classList.remove("hidden");
+    providerPanelCustom?.classList.add("hidden");
+  } else {
+    providerTabCustom?.classList.add("active");
+    providerTabGemini?.classList.remove("active");
+    providerTabCustom?.setAttribute("aria-selected", "true");
+    providerTabGemini?.setAttribute("aria-selected", "false");
+    providerPanelCustom?.classList.remove("hidden");
+    providerPanelGemini?.classList.add("hidden");
+  }
+}
+
+function updateGeminiKeyValidationBadges() {
+  if (!settingGeminiKeys || !keyCountTotal) return;
+  const raw = settingGeminiKeys.value || "";
+  const keys = parseGeminiKeys(raw);
+  const total = keys.length;
+
+  const validKeys = keys.filter(k => /^AIza[0-9A-Za-z\-_]{35}$/.test(k));
+  const invalidCount = total - validKeys.length;
+
+  keyCountTotal.textContent = `${total} key${total === 1 ? "" : "s"}`;
+  if (total === 0) {
+    keyCountValid?.classList.add("hidden");
+    keyCountInvalid?.classList.add("hidden");
+  } else {
+    if (keyCountValid) {
+      keyCountValid.textContent = `${validKeys.length} valid`;
+      keyCountValid.classList.remove("hidden");
+    }
+    if (keyCountInvalid) {
+      if (invalidCount > 0) {
+        keyCountInvalid.textContent = `${invalidCount} invalid`;
+        keyCountInvalid.classList.remove("hidden");
+      } else {
+        keyCountInvalid.classList.add("hidden");
+      }
+    }
+  }
+}
+
+function handleToggleGeminiKeysMask() {
+  const wrapper = document.getElementById("gemini-keys-wrapper") || settingGeminiKeys?.closest(".textarea-wrapper");
+  const overlay = document.getElementById("gemini-mask-overlay");
+  const maskIcon = document.getElementById("mask-icon");
+  const maskText = document.getElementById("mask-text");
+  if (!wrapper) return;
+
+  wrapper.classList.toggle("masked");
+  const isMasked = wrapper.classList.contains("masked");
+
+  if (overlay) {
+    if (isMasked) {
+      overlay.classList.remove("hidden");
+    } else {
+      overlay.classList.add("hidden");
+    }
+  }
+
+  if (maskIcon) maskIcon.textContent = isMasked ? "🙈" : "👁️";
+  if (maskText) maskText.textContent = isMasked ? "Show Keys" : "Hide Keys";
+  if (toggleGeminiKeysMask) {
+    toggleGeminiKeysMask.setAttribute("aria-label", isMasked ? "Show Gemini Keys" : "Hide Gemini Keys");
+  }
+}
+
+function handleGeminiModelChange() {
+  if (settingGeminiModel?.value === "custom") {
+    geminiCustomModelRow?.classList.remove("hidden");
+    settingGeminiCustomModel?.focus();
+  } else {
+    geminiCustomModelRow?.classList.add("hidden");
+  }
+}
+
+function updateGeminiStrategyDesc(val) {
+  if (!geminiRoutingDesc) return;
+  if (val === "round-robin") {
+    geminiRoutingDesc.textContent = "Evenly spreads generation requests across all configured API keys to maximize aggregate quota.";
+  } else if (val === "least-busy") {
+    geminiRoutingDesc.textContent = "Directs each chunk to whichever key currently has the fewest in-flight requests or lowest load.";
+  } else if (val === "rate-limit-fallback") {
+    geminiRoutingDesc.textContent = "Primary key receives all traffic until hitting 429 quota exhaustion, then fails over to standby keys.";
+  }
+}
+
+async function handleTestGeminiKeys() {
+  if (!btnTestGeminiKeys) return;
+  const rawKeys = settingGeminiKeys?.value || "";
+  const keys = parseGeminiKeys(rawKeys);
+
+  if (keys.length === 0) {
+    showAlert("Please enter at least one Google Gemini API key to test.", "error", 4000);
+    return;
+  }
+
+  let testModel = settingGeminiModel?.value || "gemini-2.5-flash";
+  if (testModel === "custom" && settingGeminiCustomModel?.value.trim()) {
+    testModel = settingGeminiCustomModel.value.trim();
+  }
+
+  btnTestGeminiKeys.disabled = true;
+  if (geminiTestSummary) {
+    geminiTestSummary.className = "test-summary-text";
+    geminiTestSummary.textContent = `Testing ${keys.length} key${keys.length === 1 ? "" : "s"}...`;
+    geminiTestSummary.classList.remove("hidden");
+  }
+
+  if (geminiKeysResultsContainer) {
+    geminiKeysResultsContainer.innerHTML = `<div style="color: #94a3b8; font-size: 12px; padding: 4px;">Sending test pings to generativelanguage.googleapis.com...</div>`;
+    geminiKeysResultsContainer.classList.remove("hidden");
+  }
+
+  try {
+    const response = await chrome.runtime.sendMessage({
+      action: "TEST_GEMINI_KEYS",
+      keys,
+      model: testModel,
+      cooldownSeconds: parseInt(settingGeminiCooldown?.value, 10) || 60,
+      maxRetries: parseInt(settingGeminiRetries?.value, 10) || 3,
+      strategy: settingGeminiStrategy?.value || "round-robin"
+    });
+
+    if (!response || !response.success) {
+      throw new Error(response?.error || "Key testing failed");
+    }
+
+    const { total, healthy, status, results } = response;
+
+    if (geminiTestSummary) {
+      geminiTestSummary.className = `test-summary-text ${status}`;
+      geminiTestSummary.textContent = `Pool Status: ${healthy} of ${total} keys healthy (${status.toUpperCase()})`;
+    }
+
+    if (geminiKeysResultsContainer && Array.isArray(results)) {
+      geminiKeysResultsContainer.innerHTML = "";
+      results.forEach((res, index) => {
+        const card = document.createElement("div");
+        const cardStatus = res.healthy ? "healthy" : (res.error && res.error.includes("429") ? "degraded" : "failed");
+        card.className = `key-health-card ${cardStatus}`;
+
+        const badgeText = res.healthy
+          ? `Healthy (${res.latencyMs}ms)`
+          : (res.error && res.error.includes("429") ? "Rate-Limited (429)" : "Invalid / Error");
+
+        const badgeClass = res.healthy ? "success" : (res.error && res.error.includes("429") ? "warning" : "error");
+
+        card.innerHTML = `
+          <div class="key-card-left">
+            <span class="key-dot ${cardStatus}"></span>
+            <span class="key-masked-name">${res.keyMask || maskApiKey(keys[index] || "")}</span>
+            <span class="key-index-pill">Key #${index + 1}</span>
+          </div>
+          <div class="key-card-right">
+            <span class="badge-tag ${badgeClass}" title="${res.error ? res.error.replace(/"/g, '&quot;') : 'Operational'}">${badgeText}</span>
+          </div>
+        `;
+        geminiKeysResultsContainer.appendChild(card);
+      });
+    }
+  } catch (err) {
+    if (geminiTestSummary) {
+      geminiTestSummary.className = "test-summary-text failed";
+      geminiTestSummary.textContent = `Test failed: ${err.message}`;
+    }
+    if (geminiKeysResultsContainer) {
+      geminiKeysResultsContainer.innerHTML = `<div style="color: #ef4444; font-size: 12px; padding: 4px;">Error: ${err.message}</div>`;
+    }
+  } finally {
+    btnTestGeminiKeys.disabled = false;
+  }
 }
 
 function toggleVisionFields() {
