@@ -1,4 +1,6 @@
 import { ANKI_HEADER_LINES, extractAnkiHeaderLines, normalizeHeaderLines } from "./defaults.js";
+import { GeminiRouter } from "./router.js";
+export { GeminiRouter };
 
 /**
  * Split an array of items into chunks of a specified size.
@@ -33,9 +35,9 @@ export function formatPromptForWords(template, words) {
     .join("\n");
 
   if (baseTemplate.includes("{LIST}")) {
-    return baseTemplate.replace("{LIST}", wordListText);
+    return baseTemplate.replace("{LIST}", () => wordListText);
   } else if (baseTemplate.includes("{WORDS_LIST}")) {
-    return baseTemplate.replace("{WORDS_LIST}", wordListText);
+    return baseTemplate.replace("{WORDS_LIST}", () => wordListText);
   } else {
     return `${baseTemplate}\n\nHere is the list of words:\n${wordListText}`;
   }
@@ -49,17 +51,19 @@ export function parseTsvRows(rawText) {
   if (!rawText) return [];
 
   // Remove markdown code fences ```tsv ... ``` or ``` ... ```
-  let text = rawText
+  const text = rawText
     .replace(/^```[a-zA-Z]*\r?\n/gm, "")
-    .replace(/```\s*$/gm, "")
-    .trim();
+    .replace(/```\s*$/gm, "");
 
   const lines = text.split(/\r?\n/);
   const validRows = [];
 
   for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
+    // Strip trailing \r (CRLF normalization) and surrounding spaces (preserve tabs)
+    const cleaned = line.replace(/\r+$/, "").replace(/^[ ]+|[ ]+$/g, "");
+    if (!cleaned || !cleaned.trim()) continue;
+
+    const trimmed = cleaned.trim();
 
     // Skip Anki header lines if the LLM output them in this chunk
     if (
@@ -71,8 +75,8 @@ export function parseTsvRows(rawText) {
     }
 
     // A valid TSV row must contain tab characters
-    if (line.includes("\t")) {
-      validRows.push(trimmed);
+    if (cleaned.includes("\t")) {
+      validRows.push(cleaned);
     }
   }
 
@@ -148,13 +152,68 @@ export async function callLlmChat({ baseUrl, apiKey, model, prompt, signal }) {
 }
 
 /**
- * Test connectivity to the configured API endpoint.
+ * Creates a configured GeminiRouter instance from user settings.
  */
-export async function testApiConnection(settings) {
+export function createGeminiRouterFromSettings(settings) {
+  const keys = (Array.isArray(settings?.geminiApiKeys) && settings.geminiApiKeys.length > 0)
+    ? settings.geminiApiKeys
+    : ((Array.isArray(settings?.geminiKeys) && settings.geminiKeys.length > 0)
+        ? settings.geminiKeys
+        : (settings?.apiKey ? [settings.apiKey] : []));
+
+  return new GeminiRouter({
+    keys,
+    strategy: settings?.geminiStrategy || settings?.geminiRoutingStrategy || "round-robin",
+    cooldownSeconds: settings?.geminiCooldownSeconds || 60,
+    maxRetries: settings?.geminiMaxRetries || 3,
+    model: settings?.geminiModel || "gemini-2.5-flash"
+  });
+}
+
+/**
+ * Unified dispatch between Direct Gemini Multi-Key Router and Custom / LiteLLM Proxy.
+ */
+export async function callLlmWithSettings({ prompt, settings, signal, routerInstance }) {
+  if (settings?.llmProvider === "gemini") {
+    const router = routerInstance || createGeminiRouterFromSettings(settings);
+    return await router.execute({
+      prompt,
+      model: settings?.geminiModel || "gemini-2.5-flash",
+      signal
+    });
+  }
+
   return await callLlmChat({
-    baseUrl: settings.apiBaseUrl,
-    apiKey: settings.apiKey,
-    model: settings.model,
+    baseUrl: settings?.apiBaseUrl,
+    apiKey: settings?.apiKey,
+    model: settings?.model,
+    prompt,
+    signal
+  });
+}
+
+/**
+ * Test connectivity to the configured API endpoint.
+ * Supports both Direct Gemini (testing key pool) and legacy OpenAI/LiteLLM proxy.
+ */
+export async function testApiConnection(settings, routerInstance) {
+  if (settings?.llmProvider === "gemini") {
+    const router = routerInstance || createGeminiRouterFromSettings(settings);
+    const poolResult = await router.testPool(settings?.geminiModel || "gemini-2.5-flash");
+    if (poolResult.total === 0) {
+      throw new Error("No Google Gemini API keys configured to test.");
+    }
+    if (poolResult.healthy === 0) {
+      const firstErr = poolResult.results.find(r => r.error)?.error || "All configured keys failed connectivity check.";
+      throw new Error(`Gemini connection test failed: ${firstErr}`);
+    }
+    return `OK (${poolResult.healthy}/${poolResult.total} keys healthy)`;
+  }
+
+  return await callLlmChat({
+    baseUrl: settings?.apiBaseUrl,
+    apiKey: settings?.apiKey,
+    model: settings?.model,
     prompt: "Reply with the word 'OK' if you can read this."
   });
 }
@@ -258,7 +317,7 @@ export async function testVisionConnection(settings) {
 /**
  * Uses the configured LLM to inspect prompt instructions and generate the exact Anki TSV headers.
  */
-export async function generateAnkiHeaderWithLlm({ promptContent, settings, signal }) {
+export async function generateAnkiHeaderWithLlm({ promptContent, settings, signal, routerInstance }) {
   if (!promptContent || !promptContent.trim()) {
     throw new Error("Prompt content is empty. Please enter your prompt instructions first.");
   }
@@ -288,12 +347,11 @@ CRITICAL RULES:
 - Do NOT output any intro, outro, explanations, or notes.
 - Output ONLY the exact 3 lines.`;
 
-  const rawOutput = await callLlmChat({
-    baseUrl: settings.apiBaseUrl,
-    apiKey: settings.apiKey,
-    model: settings.model,
+  const rawOutput = await callLlmWithSettings({
     prompt: metaPrompt,
-    signal
+    settings,
+    signal,
+    routerInstance
   });
 
   const parsedLines = (rawOutput || "")
@@ -322,7 +380,8 @@ export async function generateAnkiDeck({
   words,
   settings,
   onProgress,
-  signal
+  signal,
+  routerInstance
 }) {
   if (!words || words.length === 0) {
     throw new Error("No words in queue to process.");
@@ -332,10 +391,15 @@ export async function generateAnkiDeck({
     throw new Error("Prompt template is empty! Please go to Settings and paste your prompt first.");
   }
 
-  const chunks = chunkArray(words, settings.chunkSize || 10);
+  const chunks = chunkArray(words, settings?.chunkSize || 10);
   const totalChunks = chunks.length;
   const allRows = [];
   const errors = [];
+
+  // Re-use or instantiate GeminiRouter once across all chunk iterations to preserve health state & key rotation
+  const activeRouter = (settings?.llmProvider === "gemini")
+    ? (routerInstance || createGeminiRouterFromSettings(settings))
+    : null;
 
   for (let i = 0; i < totalChunks; i++) {
     if (signal?.aborted) {
@@ -358,12 +422,11 @@ export async function generateAnkiDeck({
 
     try {
       const prompt = formatPromptForWords(settings.promptTemplate, chunkWords);
-      const rawOutput = await callLlmChat({
-        baseUrl: settings.apiBaseUrl,
-        apiKey: settings.apiKey,
-        model: settings.model,
+      const rawOutput = await callLlmWithSettings({
         prompt,
-        signal
+        settings,
+        signal,
+        routerInstance: activeRouter
       });
 
       const parsedRows = parseTsvRows(rawOutput);

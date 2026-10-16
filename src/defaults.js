@@ -147,6 +147,15 @@ export const DEFAULT_SETTINGS = {
   model: "gpt-4o-mini",
   chunkSize: 10,
   autoClearOnExport: true,
+  // Direct Google Gemini Multi-Key settings
+  llmProvider: "custom", // "custom" | "gemini"
+  geminiApiKeys: [],
+  geminiKeys: [],
+  geminiModel: "gemini-2.5-flash",
+  geminiStrategy: "round-robin", // "round-robin" | "least-busy" | "rate-limit-fallback"
+  geminiRoutingStrategy: "round-robin",
+  geminiCooldownSeconds: 60,
+  geminiMaxRetries: 3,
   // Dedicated Vision / OCR settings (LM Studio, Ollama, LiteLLM, or inherit main)
   ocrEngine: "api", // "api" | "local"
   useDedicatedVision: false,
@@ -294,9 +303,45 @@ export async function getSettings() {
 
   const promptTemplate = activePrompt ? activePrompt.content : "";
 
+  // Normalize and migrate Gemini multi-key settings
+  let geminiApiKeys = [];
+  if (Array.isArray(raw.geminiApiKeys)) {
+    geminiApiKeys = raw.geminiApiKeys.map(k => (typeof k === "string" ? k.trim() : "")).filter(Boolean);
+  } else if (Array.isArray(raw.geminiKeys)) {
+    geminiApiKeys = raw.geminiKeys.map(k => (typeof k === "string" ? k.trim() : "")).filter(Boolean);
+  } else if (typeof raw.geminiApiKeys === "string") {
+    geminiApiKeys = raw.geminiApiKeys.split(/[\r\n,;]+/).map(k => k.trim()).filter(Boolean);
+  } else if (typeof raw.geminiKeys === "string") {
+    geminiApiKeys = raw.geminiKeys.split(/[\r\n,;]+/).map(k => k.trim()).filter(Boolean);
+  }
+  geminiApiKeys = Array.from(new Set(geminiApiKeys));
+
+  let llmProvider = raw.llmProvider || DEFAULT_SETTINGS.llmProvider;
+  if (!raw.llmProvider) {
+    if (geminiApiKeys.length > 0) {
+      llmProvider = "gemini";
+    } else if (raw.apiKey && typeof raw.apiKey === "string" && raw.apiKey.trim().startsWith("AIza")) {
+      geminiApiKeys = [raw.apiKey.trim()];
+      llmProvider = "gemini";
+    }
+  }
+
+  const geminiStrategy = raw.geminiStrategy || raw.geminiRoutingStrategy || DEFAULT_SETTINGS.geminiStrategy;
+  const geminiModel = raw.geminiModel || DEFAULT_SETTINGS.geminiModel;
+  const geminiCooldownSeconds = typeof raw.geminiCooldownSeconds === "number" ? raw.geminiCooldownSeconds : DEFAULT_SETTINGS.geminiCooldownSeconds;
+  const geminiMaxRetries = typeof raw.geminiMaxRetries === "number" ? raw.geminiMaxRetries : DEFAULT_SETTINGS.geminiMaxRetries;
+
   return {
     ...DEFAULT_SETTINGS,
     ...raw,
+    llmProvider,
+    geminiApiKeys,
+    geminiKeys: geminiApiKeys,
+    geminiStrategy,
+    geminiRoutingStrategy: geminiStrategy,
+    geminiModel,
+    geminiCooldownSeconds,
+    geminiMaxRetries,
     prompts,
     activePromptId,
     promptTemplate
